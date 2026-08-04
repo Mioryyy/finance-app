@@ -1,16 +1,16 @@
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from aiogram import Router, F
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date
 
 from app.bot.states import ExpenseStates
 from app.database import async_session_maker
+from app.models.expense import Expense
 from app.repositories.category_repository import get_categories_for_user
 from app.repositories.user_repository import get_or_create_user
-from app.models.expense import Expense
 
 router = Router()
 
@@ -49,7 +49,7 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     description = data["description"]
     amount = data["amount"]
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     async with async_session_maker() as session:
         user = await get_or_create_user(session, callback.from_user.id)
         new_expense = Expense(
