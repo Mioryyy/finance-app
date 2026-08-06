@@ -38,7 +38,14 @@ async def add_expense(message: Message, state: FSMContext):
     builder = InlineKeyboardBuilder()
     for category in categories:
         builder.button(text=category.name, callback_data=f"category:{category.id}")
-    builder.adjust(2)
+    n = len(categories)
+    adjust = [2] * (n // 2)
+    if n % 2 == 1:
+        adjust.append(1)
+    builder.button(text="➕ Добавить категорию", callback_data="category_add")
+    adjust.append(1)
+    builder.adjust(*adjust)
+
     keyboard = builder.as_markup()
     await message.answer(text="Выбери категорию", reply_markup=keyboard)
 
@@ -61,5 +68,5 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
         )
         session.add(new_expense)
         await session.commit()
-    await callback.message.answer("Трата записана")
+    await callback.message.edit_text("Трата записана")
     await state.clear()
