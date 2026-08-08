@@ -1,7 +1,7 @@
 import asyncio
 
 from app.database import async_session_maker
-from app.models.user import User
+from app.models.user import User  # noqa: F401
 from app.repositories.category_repository import get_or_create_default_category
 
 DEFAULT_CATEGORIES = [
@@ -17,12 +17,21 @@ DEFAULT_CATEGORIES = [
     "🛒 Крупные покупки",
     "📦 Другое",
 ]
+DEFAULT_INCOME_CATEGORIES = [
+    "💰 Зарплата",
+    "🎁 Подарок",
+    "💳 Возврат долга",
+    "📈 Подработка",
+    "🎉 Другое",
+]
 
 
 async def main():
     async with async_session_maker() as session:
         for name in DEFAULT_CATEGORIES:
-            await get_or_create_default_category(session, name)
+            await get_or_create_default_category(session, name, type="expense")
+        for name in DEFAULT_INCOME_CATEGORIES:
+            await get_or_create_default_category(session, name, type="income")
 
 
 if __name__ == "__main__":

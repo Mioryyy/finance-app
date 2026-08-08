@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.bot.states import CategoryStates
 from app.database import async_session_maker
 from app.models.category import Category
-from app.models.expense import Expense
+from app.models.transaction import Transaction
 from app.repositories.user_repository import get_or_create_user
 
 router = Router()
@@ -18,34 +18,41 @@ router = Router()
 
 async def finalize_category_creation(telegram_id, name, data):
     async with async_session_maker() as session:
-        user_id = await get_or_create_user(session=session, telegram_id=telegram_id)
-        new_category = Category(name=name, owner_id=user_id.id)
+        user, _is_new = await get_or_create_user(
+            session=session, telegram_id=telegram_id
+        )
+        new_category = Category(name=name, owner_id=user.id)
         session.add(new_category)
         await session.flush()
 
         if data.get("description"):
-            new_expense = Expense(
-                user_id=new_category.owner_id,
-                category_id=new_category.id,
-                description=data["description"],
-                amount=data["amount"],
-                date=date.today(),  # noqa: DTZ011
+            user_id = new_category.owner_id
+            category_id = new_category.id
+            description = data["description"]
+            amount = data["amount"]
+            today = date.today()  # noqa: DTZ011
+            new_expense = Transaction(
+                user_id=user_id,
+                category_id=category_id,
+                description=description,
+                amount=amount,
+                date=today,
             )
             session.add(new_expense)
         await session.commit()
-    return bool(data.get("description"))
+    return (bool(data.get("description")), data.get("description"), data.get("amount"))
 
 
 @router.message(Command("add_category"))
 async def cmd_add_category(message: Message, state: FSMContext):
-    await message.answer("Введите название категории")
+    await message.answer("🏷 Как назовём новую категорию?")
     await state.set_state(CategoryStates.waiting_for_new_category_name)
 
 
 @router.callback_query(F.data == "category_add")
 async def callback_add_category(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("Создаём новую категорию...")
-    await callback.message.answer("Введите название категории")
+    await callback.message.delete()
+    await callback.message.answer("🏷 Как назовём новую категорию?")
     await state.set_state(CategoryStates.waiting_for_new_category_name)
     await callback.answer()
 
@@ -58,7 +65,8 @@ async def process_category_name(message: Message, state: FSMContext):
     builder.button(text="Пропустить ", callback_data="skip")
     keyboard = builder.as_markup()
     await message.answer(
-        text="Добавбте эмоджи для вашей категории", reply_markup=keyboard
+        text="Хочешь добавить эмодзи для категории? Просто отправь его следующим сообщением, или нажми «Пропустить»",
+        reply_markup=keyboard,
     )
     await state.set_state(CategoryStates.waiting_for_emoji)
 
@@ -67,15 +75,17 @@ async def process_category_name(message: Message, state: FSMContext):
 async def process_category_emoji(message: Message, state: FSMContext):
     data = await state.get_data()
     new_category_name = f"{message.text} {data['new_category_name']}"
-    expense_created = await finalize_category_creation(
+    expense_created, description, amount = await finalize_category_creation(
         message.from_user.id, new_category_name, data
     )
     if expense_created:
-        await message.answer("Категория добавлена")
+        await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
         await asyncio.sleep(1)
-        await message.answer("Трата записана")
+        await message.answer(
+            f"✅ Трата <b>{description}</b> ({amount}) записана в категорию <b>{new_category_name}</b>"
+        )
     else:
-        await message.answer("Категория добавлена")
+        await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
     await state.clear()
 
 
@@ -83,14 +93,20 @@ async def process_category_emoji(message: Message, state: FSMContext):
 async def process_skip_emoji(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     new_category_name = data["new_category_name"]
-    expense_created = await finalize_category_creation(
+    expense_created, description, amount = await finalize_category_creation(
         callback.from_user.id, new_category_name, data
     )
     if expense_created:
-        await callback.message.answer("Категория добавлена")
+        await callback.message.answer(
+            f"✅ Категория <b>{new_category_name}</b> добавлена"
+        )
         await asyncio.sleep(1)
-        await callback.message.answer("Трата записана")
+        await callback.message.answer(
+            f"✅ Трата <b>{description}</b> ({amount}) записана в категорию <b>{new_category_name}</b>"
+        )
     else:
-        await callback.message.answer("Категория добавлена")
+        await callback.message.answer(
+            f"✅ Категория <b>{new_category_name}</b> добавлена"
+        )
     await callback.answer()
     await state.clear()

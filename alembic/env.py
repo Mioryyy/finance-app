@@ -18,8 +18,9 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from app.database import Base
 from app.models.category import Category
-from app.models.expense import Expense
+from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.account import Account
 
 target_metadata = Base.metadata
 

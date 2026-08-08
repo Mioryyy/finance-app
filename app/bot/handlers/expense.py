@@ -7,9 +7,10 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.states import ExpenseStates
+from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
-from app.models.expense import Expense
-from app.repositories.category_repository import get_categories_for_user
+from app.models.transaction import Transaction
+from app.repositories.category_repository import get_categories_for_user, get_category
 from app.repositories.user_repository import get_or_create_user
 
 router = Router()
@@ -26,14 +27,19 @@ async def add_expense(message: Message, state: FSMContext):
     try:
         amount = Decimal(amount)
     except InvalidOperation:
-        await message.answer("введите число")
+        await message.answer(
+            "❌ Не могу распознать сумму.\n\n"
+            "Напиши в формате: <b>описание сумма</b>\n"
+            "Например: <i>кофе 50</i>"
+        )
         return
     description = " ".join(name_parts)
     await state.update_data(description=description, amount=amount)
     await state.set_state(ExpenseStates.waiting_for_category)
 
     async with async_session_maker() as session:
-        user = await get_or_create_user(session, message.from_user.id)
+        user, _is_new = await get_or_create_user(session, message.from_user.id)
+
         categories = await get_categories_for_user(session, user.id)
     builder = InlineKeyboardBuilder()
     for category in categories:
@@ -57,9 +63,10 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     description = data["description"]
     amount = data["amount"]
     today = date.today()  # noqa: DTZ011
+
     async with async_session_maker() as session:
-        user = await get_or_create_user(session, callback.from_user.id)
-        new_expense = Expense(
+        user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        new_expense = Transaction(
             user_id=user.id,
             category_id=category_id,
             description=description,
@@ -67,6 +74,11 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
             date=today,
         )
         session.add(new_expense)
+        category = await get_category(session, category_id)
+        currency_symbol = CURRENCY_SYMBOLS.get(user.currency, user.currency)
         await session.commit()
-    await callback.message.edit_text("Трата записана")
+
+    await callback.message.edit_text(
+        f"✅ Трата <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category}</b>"
+    )
     await state.clear()

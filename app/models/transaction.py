@@ -7,12 +7,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class Expense(Base):
+class Transaction(Base):
 
-    __tablename__ = "expenses"
+    __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
     category_id: Mapped[int] = mapped_column(ForeignKey("category.id"))
     description: Mapped[str | None] = mapped_column(Text)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
