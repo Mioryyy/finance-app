@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.account import Account
 
 
-async def create_account(session: AsyncSession, owner_id, name, type, currency):
+async def create_account(session: AsyncSession, owner_id, name, account_type, currency):
     new_account = Account(
-        name=name, balance=0, type=type, currency=currency, owner_id=owner_id
+        name=name, balance=0, type=account_type, currency=currency, owner_id=owner_id
     )
     session.add(new_account)
     await session.flush()
@@ -20,7 +20,6 @@ async def update_balance(session: AsyncSession, account_id, delta):
     result = await session.execute(stmt)
     account = result.scalar_one()
     account.balance += delta
-    await session.commit()
 
 
 async def get_accounts_for_user(session: AsyncSession, user_id):
@@ -28,3 +27,10 @@ async def get_accounts_for_user(session: AsyncSession, user_id):
     result = await session.execute(stmt)
     accounts = result.scalars().all()
     return accounts
+
+
+async def get_account(session: AsyncSession, account_id: int):
+    stmt = select(Account).where(Account.id == account_id)
+    result = await session.execute(stmt)
+    account = result.scalar_one()
+    return account

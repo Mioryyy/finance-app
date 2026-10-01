@@ -7,8 +7,8 @@ from aiogram.types import BotCommand
 from dotenv import load_dotenv
 
 from app.bot.handlers.add_category import router as add_category_router
-from app.bot.handlers.expense import router as add_expense_router
 from app.bot.handlers.start import router as start_router
+from app.bot.handlers.transaction import router as add_transaction_router
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
@@ -17,7 +17,7 @@ bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 dp.include_router(start_router)
 dp.include_router(add_category_router)
-dp.include_router(add_expense_router)
+dp.include_router(add_transaction_router)
 
 commands = [
     BotCommand(command="start", description="Начать работу с ботом"),

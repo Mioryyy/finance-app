@@ -29,9 +29,9 @@ DEFAULT_INCOME_CATEGORIES = [
 async def main():
     async with async_session_maker() as session:
         for name in DEFAULT_CATEGORIES:
-            await get_or_create_default_category(session, name, type="expense")
+            await get_or_create_default_category(session, name, category_type="expense")
         for name in DEFAULT_INCOME_CATEGORIES:
-            await get_or_create_default_category(session, name, type="income")
+            await get_or_create_default_category(session, name, category_type="income")
 
 
 if __name__ == "__main__":
