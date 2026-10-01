@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
@@ -16,10 +16,12 @@ async def create_account(session: AsyncSession, owner_id, name, account_type, cu
 
 
 async def update_balance(session: AsyncSession, account_id, delta):
-    stmt = select(Account).where(Account.id == account_id)
-    result = await session.execute(stmt)
-    account = result.scalar_one()
-    account.balance += delta
+    stmt = (
+        update(Account)
+        .where(Account.id == account_id)
+        .values(balance=Account.balance + delta)
+    )
+    await session.execute(stmt)
 
 
 async def get_accounts_for_user(session: AsyncSession, user_id):
