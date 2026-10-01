@@ -76,7 +76,9 @@ async def process_transaction_type(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("category:"))
+@router.callback_query(
+    F.data.startswith("category:"), TransactionStates.waiting_for_category
+)
 async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     category_id = int(callback.data.split(":")[1])
     data = await state.get_data()
@@ -107,3 +109,9 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
         f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category}</b>"
     )
     await state.clear()
+
+
+@router.callback_query(F.data.startswith("category:"))
+async def handle_category_oldcallback(callback: CallbackQuery):
+    await callback.answer("Кнопка устарела, отправь трату заново", show_alert=True)
+    await callback.message.delete()
