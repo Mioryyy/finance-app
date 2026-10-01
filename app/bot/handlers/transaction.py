@@ -1,5 +1,4 @@
 from datetime import date
-from decimal import Decimal, InvalidOperation
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -10,6 +9,7 @@ from app.bot.states import TransactionStates
 from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.models.transaction import Transaction
+from app.parsing import parse_amount
 from app.repositories.account_repository import get_account, update_balance
 from app.repositories.category_repository import get_categories_for_user, get_category
 from app.repositories.user_repository import get_or_create_user
@@ -31,10 +31,9 @@ async def add_transaction(message: Message, state: FSMContext):
     parts = message.text.split()
     if not parts:
         return
-    *name_parts, amount = parts
-    try:
-        amount = Decimal(amount)
-    except InvalidOperation:
+    *name_parts, raw_amount = parts
+    amount = parse_amount(raw_amount)
+    if amount is None:
         await message.answer(
             "❌ Не могу распознать сумму.\n\n"
             "Напиши в формате: <b>описание сумма</b>\n"
