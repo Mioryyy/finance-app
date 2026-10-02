@@ -10,9 +10,7 @@ async def create_account(session: AsyncSession, owner_id, name, account_type, cu
     )
     session.add(new_account)
     await session.flush()
-    account_id = new_account.id
-    await session.commit()
-    return account_id
+    return new_account
 
 
 async def update_balance(session: AsyncSession, account_id, delta):

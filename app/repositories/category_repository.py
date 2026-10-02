@@ -38,7 +38,7 @@ async def get_or_create_default_category(
         return category
     new_category = Category(name=name, type=category_type)
     session.add(new_category)
-    await session.commit()
+    await session.flush()
     return new_category
 
 

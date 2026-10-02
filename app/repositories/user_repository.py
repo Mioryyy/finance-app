@@ -12,7 +12,7 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int):
         return user, False
     new_user = User(telegram_id=telegram_id)
     session.add(new_user)
-    await session.commit()
+    await session.flush()
     return new_user, True
 
 
@@ -21,4 +21,4 @@ async def set_active_account(session: AsyncSession, telegram_id: int, account_id
     result = await session.execute(stmt)
     user = result.scalar_one()
     user.active_account_id = account_id
-    await session.commit()
+    await session.flush()

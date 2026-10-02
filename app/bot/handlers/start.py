@@ -17,6 +17,7 @@ router = Router()
 async def cmd_start(message: Message, state: FSMContext):
     async with async_session_maker() as session:
         _user, is_new = await get_or_create_user(session, message.from_user.id)
+        await session.commit()
     if is_new:
 
         await message.answer(
@@ -83,7 +84,8 @@ async def process_account_currency(callback: CallbackQuery, state: FSMContext):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, callback.from_user.id)
         account = await create_account(session, user.id, name, account_type, currency)
-        await set_active_account(session, callback.from_user.id, account)
+        await set_active_account(session, callback.from_user.id, account.id)
+        await session.commit()
     await callback.message.answer(
         f"Вы создали свой первый счет:\n{acctype} {name} в валюте {currency}"
     )

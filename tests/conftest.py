@@ -21,7 +21,7 @@ assert TEST_DATABASE_URL.endswith("finance_test")
 
 
 @pytest_asyncio.fixture
-async def db_test():
+async def session():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

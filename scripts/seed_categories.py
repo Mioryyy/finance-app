@@ -32,6 +32,7 @@ async def main():
             await get_or_create_default_category(session, name, category_type="expense")
         for name in DEFAULT_INCOME_CATEGORIES:
             await get_or_create_default_category(session, name, category_type="income")
+        await session.commit()
 
 
 if __name__ == "__main__":
