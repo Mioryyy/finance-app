@@ -36,14 +36,14 @@ async def finalize_category_creation(telegram_id, name, data):
             description = data["description"]
             amount = data["amount"]
             today = date.today()  # noqa: DTZ011
-            new_expense = Transaction(
+            new_transaction = Transaction(
                 account_id=account_id,
                 category_id=category_id,
                 description=description,
                 amount=amount,
                 date=today,
             )
-            session.add(new_expense)
+            session.add(new_transaction)
             if tx_type == "expense":
                 await update_balance(session, account_id, -amount)
             else:
