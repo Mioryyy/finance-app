@@ -1,5 +1,4 @@
 import asyncio
-from datetime import date
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -11,8 +10,8 @@ from app.bot.states import CategoryStates
 from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.models.category import Category
-from app.models.transaction import Transaction
-from app.repositories.account_repository import get_account, update_balance
+from app.repositories.account_repository import get_account
+from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
 
 router = Router()
@@ -35,19 +34,14 @@ async def finalize_category_creation(telegram_id, name, data):
             category_id = new_category.id
             description = data["description"]
             amount = data["amount"]
-            today = date.today()  # noqa: DTZ011
-            new_transaction = Transaction(
-                account_id=account_id,
-                category_id=category_id,
-                description=description,
-                amount=amount,
-                date=today,
+            await create_transaction(
+                session,
+                user.active_account_id,
+                category_id,
+                description,
+                amount,
+                tx_type,
             )
-            session.add(new_transaction)
-            if tx_type == "expense":
-                await update_balance(session, account_id, -amount)
-            else:
-                await update_balance(session, account_id, amount)
         await session.commit()
     return (
         bool(data.get("description")),

@@ -1,5 +1,3 @@
-from datetime import date
-
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -8,10 +6,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.bot.states import TransactionStates
 from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
-from app.models.transaction import Transaction
 from app.parsing import parse_amount
-from app.repositories.account_repository import get_account, update_balance
+from app.repositories.account_repository import get_account
 from app.repositories.category_repository import get_categories_for_user, get_category
+from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
 
 router = Router()
@@ -84,25 +82,15 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     description = data["description"]
     amount = data["amount"]
-    today = date.today()  # noqa: DTZ011
     tx_type = data["tx_type"]
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, callback.from_user.id)
-        new_expense = Transaction(
-            account_id=user.active_account_id,
-            category_id=category_id,
-            description=description,
-            amount=amount,
-            date=today,
+        await create_transaction(
+            session, user.active_account_id, category_id, description, amount, tx_type
         )
-        session.add(new_expense)
         category = await get_category(session, category_id)
         account = await get_account(session, user.active_account_id)
         currency_symbol = CURRENCY_SYMBOLS.get(account.currency, account.currency)
-        if tx_type == "expense":
-            await update_balance(session, user.active_account_id, -amount)
-        else:
-            await update_balance(session, user.active_account_id, amount)
         await session.commit()
 
     await callback.message.edit_text(
