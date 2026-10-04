@@ -70,12 +70,14 @@ async def ask_for_emoji(send_func, state: FSMContext):
 
 @router.message(Command("add_category"))
 async def cmd_add_category(message: Message, state: FSMContext):
+    await state.clear()
     await message.answer("🏷 Как назовём новую категорию?")
     await state.set_state(CategoryStates.waiting_for_new_category_name)
 
 
 @router.callback_query(F.data == "category_add")
 async def callback_add_category(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.delete()
     await callback.message.answer("🏷 Как назовём новую категорию?")
     await state.set_state(CategoryStates.waiting_for_new_category_name)
