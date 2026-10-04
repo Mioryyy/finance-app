@@ -1,7 +1,12 @@
+from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot.states import TransactionStates
+from app.database import async_session_maker
 from app.models.category import Category
+from app.repositories.user_repository import get_or_create_user
 
 
 async def get_categories_for_user(session: AsyncSession, user_id: int, category_type):
@@ -42,3 +47,22 @@ async def get_category(session: AsyncSession, category_id: int):
     result = await session.execute(stmt)
     category = result.scalar_one()
     return category
+
+
+async def show_category(answer_func, state: FSMContext, tx_type: str, user_id: int):
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, user_id)
+        categories = await get_categories_for_user(session, user.id, tx_type)
+    builder = InlineKeyboardBuilder()
+    for category in categories:
+        builder.button(text=category.name, callback_data=f"category:{category.id}")
+    n = len(categories)
+    adjust = [2] * (n // 2)
+    if n % 2 == 1:
+        adjust.append(1)
+    builder.button(text="➕ Добавить категорию", callback_data="category_add")
+    adjust.append(1)
+    builder.adjust(*adjust)
+    keyboard = builder.as_markup()
+    await answer_func(text="Выбери категорию", reply_markup=keyboard)
+    await state.set_state(TransactionStates.waiting_for_category)

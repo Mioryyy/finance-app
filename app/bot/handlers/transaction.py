@@ -1,4 +1,7 @@
+from datetime import date, datetime
+
 from aiogram import F, Router
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -8,14 +11,14 @@ from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.parsing import parse_amount
 from app.repositories.account_repository import get_account
-from app.repositories.category_repository import get_categories_for_user, get_category
+from app.repositories.category_repository import get_category, show_category
 from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
 
 router = Router()
 
 
-@router.message()
+@router.message(StateFilter(None))
 async def add_transaction(message: Message, state: FSMContext):
     if not message.text:
         return
@@ -55,23 +58,44 @@ async def process_transaction_type(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
     tx_type = callback.data.split(":")[1]
     await state.update_data(tx_type=tx_type)
-    async with async_session_maker() as session:
-        user, _is_new = await get_or_create_user(session, callback.from_user.id)
-        categories = await get_categories_for_user(session, user.id, tx_type)
     builder = InlineKeyboardBuilder()
-    for category in categories:
-        builder.button(text=category.name, callback_data=f"category:{category.id}")
-    n = len(categories)
-    adjust = [2] * (n // 2)
-    if n % 2 == 1:
-        adjust.append(1)
-    builder.button(text="➕ Добавить категорию", callback_data="category_add")
-    adjust.append(1)
-    builder.adjust(*adjust)
+    builder.button(text="Сегодня", callback_data="date:today")
+    builder.button(text="Указать вручную", callback_data="date:manual")
+    builder.adjust(2)
     keyboard = builder.as_markup()
-    await callback.message.answer(text="Выбери категорию", reply_markup=keyboard)
-    await state.set_state(TransactionStates.waiting_for_category)
+    await callback.message.answer("Укажи дату", reply_markup=keyboard)
+    await state.set_state(TransactionStates.waiting_for_date)
+
+
+@router.callback_query(F.data == "date:today", TransactionStates.waiting_for_date)
+async def process_date_today(callback: CallbackQuery, state: FSMContext):
+    tr_date = date.today()  # noqa: DTZ011
+    await state.update_data(tr_date=tr_date)
+    data = await state.get_data()
+    tx_type = data["tx_type"]
+    await show_category(callback.message.answer, state, tx_type, callback.from_user.id)
     await callback.answer()
+
+
+@router.callback_query(F.data == "date:manual", TransactionStates.waiting_for_date)
+async def process_date_manual(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("Напиши дату в формате дд.мм.гггг")
+    await state.set_state(TransactionStates.waiting_for_date)
+    await callback.answer()
+
+
+@router.message(TransactionStates.waiting_for_date)
+async def parse_date_manual(message: Message, state: FSMContext):
+    text = message.text
+    try:
+        tr_date = datetime.strptime(text, "%d.%m.%Y").date()  # noqa: DTZ007
+    except ValueError:
+        await message.answer("Напиши дату в формате дд.мм.гггг!")
+        return
+    await state.update_data(tr_date=tr_date)
+    data = await state.get_data()
+    tx_type = data["tx_type"]
+    await show_category(message.answer, state, tx_type, message.from_user.id)
 
 
 @router.callback_query(
@@ -83,18 +107,26 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     description = data["description"]
     amount = data["amount"]
     tx_type = data["tx_type"]
+    tr_date = data["tr_date"]
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, callback.from_user.id)
         await create_transaction(
-            session, user.active_account_id, category_id, description, amount, tx_type
+            session,
+            user.active_account_id,
+            category_id,
+            description,
+            amount,
+            tx_type,
+            tr_date,
         )
         category = await get_category(session, category_id)
         account = await get_account(session, user.active_account_id)
         currency_symbol = CURRENCY_SYMBOLS.get(account.currency, account.currency)
+        category_name = category.name
         await session.commit()
 
     await callback.message.edit_text(
-        f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category.name}</b>"
+        f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category_name}</b>"
     )
     await state.clear()
 

@@ -34,6 +34,7 @@ async def finalize_category_creation(telegram_id, name, data):
             category_id = new_category.id
             description = data["description"]
             amount = data["amount"]
+            tr_date = data["tr_date"]
             await create_transaction(
                 session,
                 user.active_account_id,
@@ -41,6 +42,7 @@ async def finalize_category_creation(telegram_id, name, data):
                 description,
                 amount,
                 tx_type,
+                tr_date,
             )
         await session.commit()
     return (
@@ -71,7 +73,7 @@ async def cmd_add_category(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "category_add")
 async def callback_add_category(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+    await state.set_state(None)
     await callback.message.delete()
     await callback.message.answer("🏷 Как назовём новую категорию?")
     await state.set_state(CategoryStates.waiting_for_new_category_name)
@@ -112,10 +114,10 @@ async def process_category_type(callback: CallbackQuery, state: FSMContext):
 async def process_category_emoji(message: Message, state: FSMContext):
     data = await state.get_data()
     new_category_name = f"{message.text} {data['new_category_name']}"
-    expense_created, description, amount, currency_symbol = (
+    transaction_created, description, amount, currency_symbol = (
         await finalize_category_creation(message.from_user.id, new_category_name, data)
     )
-    if expense_created:
+    if transaction_created:
         await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
         await asyncio.sleep(1)
         await message.answer(
