@@ -94,7 +94,7 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
         await session.commit()
 
     await callback.message.edit_text(
-        f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category}</b>"
+        f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{category.name}</b>"
     )
     await state.clear()
 

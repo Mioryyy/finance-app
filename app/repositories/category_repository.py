@@ -46,4 +46,4 @@ async def get_category(session: AsyncSession, category_id: int):
     stmt = select(Category).where(Category.id == category_id)
     result = await session.execute(stmt)
     category = result.scalar_one()
-    return category.name
+    return category
