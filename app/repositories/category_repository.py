@@ -9,7 +9,7 @@ async def get_categories_for_user(session: AsyncSession, user_id: int, category_
     stmt = (
         select(Category)
         .where(
-            or_(Category.owner_id == None, Category.owner_id == user_id),
+            or_(Category.owner_id.is_(None), Category.owner_id == user_id),
             Category.type == category_type,
         )
         .order_by(order_key, Category.id)
@@ -22,15 +22,10 @@ async def get_categories_for_user(session: AsyncSession, user_id: int, category_
 async def get_or_create_default_category(
     session: AsyncSession, name: str, category_type: str
 ):
-    order_key = Category.name.endswith("Другое")
-    stmt = (
-        select(Category)
-        .where(
-            Category.name == name,
-            Category.owner_id == None,
-            Category.type == category_type,
-        )
-        .order_by(order_key, Category.id)
+    stmt = select(Category).where(
+        Category.name == name,
+        Category.owner_id.is_(None),
+        Category.type == category_type,
     )
     result = await session.execute(stmt)
     category = result.scalar_one_or_none()
