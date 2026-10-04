@@ -12,6 +12,8 @@ from app.repositories.user_repository import get_or_create_user, set_active_acco
 
 router = Router()
 
+start_text = "👋 Привет! Я помогу тебе следить за расходами.\n\n💸 Чтобы добавить трату, просто напиши описание и сумму:\nкофе 50\n\n🏷 Есть готовые категории, а если чего-то не хватает — можно создать свою через /add_category\n\n"
+
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
@@ -22,27 +24,13 @@ async def cmd_start(message: Message, state: FSMContext):
     if user.active_account_id is None:
 
         await message.answer(
-            """👋 Привет! Я помогу тебе следить за расходами.
-
-💸 Чтобы добавить трату, просто напиши описание и сумму:
-кофе 50
-
-🏷 Есть готовые категории, а если чего-то не хватает — можно создать свою через /add_category
-
-Для начала создадим твой первый счет👇""",
+            f"{start_text}Для начала создадим твой первый счет👇",
         )
         await message.answer("Как его назовём?")
         await state.set_state(AccountStates.waiting_for_name)
         return
 
-    await message.answer("""👋 Привет! Я помогу тебе следить за расходами.
-
-💸 Чтобы добавить трату, просто напиши описание и сумму:
-кофе 50
-
-🏷 Есть готовые категории, а если чего-то не хватает — можно создать свою через /add_category
-
-Погнали! Напиши свою первую трату 👇""")
+    await message.answer(f"{start_text}Погнали! Напиши свою первую трату 👇")
 
 
 @router.message(AccountStates.waiting_for_name)
