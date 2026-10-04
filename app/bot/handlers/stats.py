@@ -26,10 +26,10 @@ async def show_stats(message: Message):
             session, user.active_account_id, date.today()  # noqa: DTZ011
         )
         if not stats:
-            await message.answer("У вас еще нет расходов за этот месяц")
+            await message.answer("У тебя еще нет расходов за этот месяц")
             return
         account = await get_account(session, user.active_account_id)
-        currency_symbol = CURRENCY_SYMBOLS[account.currency]
+        currency_symbol = CURRENCY_SYMBOLS.get(account.currency, account.currency)
         lines = []
         for name, amount in stats:
             lines.append(f"{name}: {amount} {currency_symbol}")
