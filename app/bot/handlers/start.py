@@ -85,7 +85,7 @@ async def process_account_currency(callback: CallbackQuery, state: FSMContext):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, callback.from_user.id)
         account = await create_account(session, user.id, name, account_type, currency)
-        await set_active_account(session, callback.from_user.id, account.id)
+        await set_active_account(session, user, account.id)
         await session.commit()
     await callback.message.answer(
         f"Вы создали свой первый счет:\n{acctype} {name} в валюте {currency}"
