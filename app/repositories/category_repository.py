@@ -62,6 +62,8 @@ async def show_category(answer_func, state: FSMContext, tx_type: str, user_id: i
         adjust.append(1)
     builder.button(text="➕ Добавить категорию", callback_data="category_add")
     adjust.append(1)
+    builder.button(text="❌ Отмена", callback_data="cancel")
+    adjust.append(1)
     builder.adjust(*adjust)
     keyboard = builder.as_markup()
     await answer_func(text="Выбери категорию", reply_markup=keyboard)
