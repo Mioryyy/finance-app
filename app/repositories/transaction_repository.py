@@ -63,3 +63,14 @@ async def create_transaction(
     else:
         await update_balance(session, account_id, amount)
 
+async def get_recent_transactions(session, account_id, offset = 0, limit=10):
+    stmt = (select(Transaction, Category.name, Category.type)
+            .join(Category, Transaction.category_id == Category.id)
+            .where(Transaction.account_id == account_id)
+            .offset(offset)
+            .limit(limit+1)
+            .order_by(Transaction.date.desc(), Transaction.id.desc()))
+    result = await session.execute(stmt)
+    rows = result.all()
+    has_more = len(rows) > limit
+    return has_more, rows[:limit]

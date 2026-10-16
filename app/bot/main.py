@@ -11,6 +11,7 @@ from app.bot.handlers.cancel import router as cancel_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
 from app.bot.handlers.transaction import router as add_transaction_router
+from app.bot.handlers.history import router as history_router
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
@@ -19,6 +20,7 @@ bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 dp.include_router(cancel_router)
 dp.include_router(start_router)
+dp.include_router(history_router)
 dp.include_router(add_category_router)
 dp.include_router(stats_router)
 dp.include_router(add_transaction_router)
@@ -27,6 +29,7 @@ dp.include_router(add_transaction_router)
 commands = [
     BotCommand(command="start", description="Начать работу с ботом"),
     BotCommand(command="add_category", description="Добавить свою категорию"),
+    BotCommand(command="history", description="Посмотреть последние 10 операций"),
     BotCommand(command="stats", description="Статистика расходов за месяц"),
     BotCommand(command="cancel", description="Отменяет действие"),
 ]
