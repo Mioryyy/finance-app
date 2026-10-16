@@ -23,6 +23,21 @@ async def get_stats(session: AsyncSession, account_id, period: date):
     result = await session.execute(stmt)
     return result.all()
 
+async def get_transactions_for_user(session: AsyncSession, account_id):
+    stmt = (select(Transaction).where(Transaction.account_id == account_id))
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+async def delete_transaction_by_id(session: AsyncSession, transaction_id: int):
+    stmt = (select(Transaction).where(Transaction.id == transaction_id))
+    result = await session.execute(stmt)
+    transaction = result.scalar_one_or_none()
+    if transaction:
+        await session.delete(transaction)
+        await session.flush()
+        return True
+    return False
+
 
 async def create_transaction(
     session: AsyncSession,
@@ -47,3 +62,4 @@ async def create_transaction(
         await update_balance(session, account_id, -amount)
     else:
         await update_balance(session, account_id, amount)
+
