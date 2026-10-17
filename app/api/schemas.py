@@ -1,7 +1,8 @@
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel
-from datetime import date
+
 
 class TransactionCreate(BaseModel):
     account_id: int

@@ -3,6 +3,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import PAGE_SIZE
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.repositories.account_repository import update_balance
@@ -63,14 +64,14 @@ async def create_transaction(
     else:
         await update_balance(session, account_id, amount)
 
-async def get_recent_transactions(session, account_id, offset = 0, limit=10):
+async def get_recent_transactions(session, account_id, offset = 0):
     stmt = (select(Transaction, Category.name, Category.type)
             .join(Category, Transaction.category_id == Category.id)
             .where(Transaction.account_id == account_id)
-            .offset(offset)
-            .limit(limit+1)
+            .offset(offset * PAGE_SIZE)
+            .limit(PAGE_SIZE+1)
             .order_by(Transaction.date.desc(), Transaction.id.desc()))
     result = await session.execute(stmt)
     rows = result.all()
-    has_more = len(rows) > limit
-    return has_more, rows[:limit]
+    has_more = len(rows) > PAGE_SIZE
+    return has_more, rows[:PAGE_SIZE]
