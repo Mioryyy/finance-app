@@ -8,7 +8,6 @@ from app.database import Base
 
 
 class Transaction(Base):
-
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True)

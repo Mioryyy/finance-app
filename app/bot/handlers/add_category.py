@@ -114,9 +114,12 @@ async def process_category_type(callback: CallbackQuery, state: FSMContext):
 async def process_category_emoji(message: Message, state: FSMContext):
     data = await state.get_data()
     new_category_name = f"{message.text} {data['new_category_name']}"
-    transaction_created, description, amount, currency_symbol = (
-        await finalize_category_creation(message.from_user.id, new_category_name, data)
-    )
+    (
+        transaction_created,
+        description,
+        amount,
+        currency_symbol,
+    ) = await finalize_category_creation(message.from_user.id, new_category_name, data)
     if transaction_created:
         await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
         await asyncio.sleep(1)
@@ -132,9 +135,12 @@ async def process_category_emoji(message: Message, state: FSMContext):
 async def process_skip_emoji(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     new_category_name = data["new_category_name"]
-    expense_created, description, amount, currency_symbol = (
-        await finalize_category_creation(callback.from_user.id, new_category_name, data)
-    )
+    (
+        expense_created,
+        description,
+        amount,
+        currency_symbol,
+    ) = await finalize_category_creation(callback.from_user.id, new_category_name, data)
     if expense_created:
         await callback.message.answer(
             f"✅ Категория <b>{new_category_name}</b> добавлена"

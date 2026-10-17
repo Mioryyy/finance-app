@@ -22,7 +22,6 @@ async def cmd_start(message: Message, state: FSMContext):
         user, _is_new = await get_or_create_user(session, message.from_user.id)
         await session.commit()
     if user.active_account_id is None:
-
         await message.answer(
             f"{start_text}Для начала создадим твой первый счет👇",
         )
