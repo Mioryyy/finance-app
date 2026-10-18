@@ -32,6 +32,8 @@ async def create_transaction(
         await update_balance(session, account_id, -amount)
     else:
         await update_balance(session, account_id, amount)
+    await session.flush()
+    return new_transaction
 
 
 async def get_stats(session: AsyncSession, account_id, period: date):
