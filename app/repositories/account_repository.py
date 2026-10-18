@@ -23,14 +23,21 @@ async def update_balance(session: AsyncSession, account_id, delta):
 
 
 async def get_accounts_for_user(session: AsyncSession, user_id):
-    stmt = select(Account).where(Account.owner_id == user_id)
+    stmt = select(Account).where(Account.owner_id == user_id).order_by(Account.id)
     result = await session.execute(stmt)
     accounts = result.scalars().all()
     return accounts
 
 
-async def get_account(session: AsyncSession, account_id: int):
+async def get_account(session: AsyncSession, account_id):
     stmt = select(Account).where(Account.id == account_id)
     result = await session.execute(stmt)
     account = result.scalar_one()
+    return account
+
+
+async def get_user_account(session: AsyncSession, account_id, user_id):
+    stmt = select(Account).where(Account.id == account_id, Account.owner_id == user_id)
+    result = await session.execute(stmt)
+    account = result.scalar_one_or_none()
     return account
