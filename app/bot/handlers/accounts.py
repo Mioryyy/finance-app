@@ -42,6 +42,8 @@ async def build_accounts_page(telegram_id):
                 builder.button(
                     text=f"{account.name}", callback_data=f"acc:{account.id}"
                 )
+        builder.button(text="➕ Новый счёт", callback_data="account_new")
+        builder.adjust(1)
         keyboard = builder.as_markup()
         if len(accounts) > 1:
             text = "\nХотите поменять счет?"
@@ -49,6 +51,11 @@ async def build_accounts_page(telegram_id):
         text = "\n".join(text_list)
         return text, keyboard
 
+async def start_account_creation(send_func, state):
+    await state.clear()
+    await send_func("Создаем новый счет")
+    await send_func("Как его назовём?")
+    await state.set_state(AccountStates.waiting_for_name)
 
 @router.message(Command("accounts"))
 async def show_accounts(message: Message):
@@ -58,14 +65,15 @@ async def show_accounts(message: Message):
 
 @router.message(Command("create_account"))
 async def cmd_create_account(message: Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Создаем новый счет")
-    await message.answer("Как его назовём?")
-    await state.set_state(AccountStates.waiting_for_name)
+    await start_account_creation(message.answer, state)
 
+@router.callback_query(F.data == "account_new")
+async def callback_create_account(callback: CallbackQuery, state: FSMContext):
+    await start_account_creation(callback.message.answer, state)
+    await callback.answer()
 
 @router.callback_query(F.data.startswith("acc:"))
-async def switch_account(callback: CallbackQuery):
+async def switch_account(callback: CallbackQuery, state: FSMContext):
     account_id = int(callback.data.split(":")[1])
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, callback.from_user.id)
