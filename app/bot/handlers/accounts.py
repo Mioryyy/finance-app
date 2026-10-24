@@ -1,9 +1,9 @@
 import html
 
-from aiogram import Router, F
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.states import AccountStates
@@ -51,11 +51,13 @@ async def build_accounts_page(telegram_id):
         text = "\n".join(text_list)
         return text, keyboard
 
+
 async def start_account_creation(send_func, state):
     await state.clear()
     await send_func("Создаем новый счет")
     await send_func("Как его назовём?")
     await state.set_state(AccountStates.waiting_for_name)
+
 
 @router.message(Command("accounts"))
 async def show_accounts(message: Message):
@@ -67,10 +69,12 @@ async def show_accounts(message: Message):
 async def cmd_create_account(message: Message, state: FSMContext):
     await start_account_creation(message.answer, state)
 
+
 @router.callback_query(F.data == "account_new")
 async def callback_create_account(callback: CallbackQuery, state: FSMContext):
     await start_account_creation(callback.message.answer, state)
     await callback.answer()
+
 
 @router.callback_query(F.data.startswith("acc:"))
 async def switch_account(callback: CallbackQuery, state: FSMContext):

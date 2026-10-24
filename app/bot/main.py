@@ -6,13 +6,13 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.types import BotCommand
 from dotenv import load_dotenv
 
+from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
 from app.bot.handlers.cancel import router as cancel_router
 from app.bot.handlers.history import router as history_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
 from app.bot.handlers.transaction import router as add_transaction_router
-from app.bot.handlers.accounts import router as accounts_router
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
