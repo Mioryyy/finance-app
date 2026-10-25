@@ -101,6 +101,7 @@ async def test_transfer_invalid_amount(session):
         await create_transfer(
             session, user.id, account1.id, account2.id, Decimal("-500")
         )
+    with pytest.raises(exc.InvalidAmount):
         await create_transfer(session, user.id, account1.id, account2.id, Decimal("0"))
     account1_id = account1.id
     account2_id = account2.id
