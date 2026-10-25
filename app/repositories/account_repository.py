@@ -1,12 +1,25 @@
+from decimal import Decimal
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
 
 
-async def create_account(session: AsyncSession, owner_id, name, account_type, currency):
+async def create_account(
+    session: AsyncSession,
+    owner_id,
+    name,
+    account_type,
+    currency,
+    initial_balance=Decimal("0"),
+):
     new_account = Account(
-        name=name, balance=0, type=account_type, currency=currency, owner_id=owner_id
+        name=name,
+        balance=initial_balance,
+        type=account_type,
+        currency=currency,
+        owner_id=owner_id,
     )
     session.add(new_account)
     await session.flush()

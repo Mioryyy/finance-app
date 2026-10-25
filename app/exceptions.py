@@ -1,12 +1,22 @@
 class TransferError(Exception):
     pass
+
+
 class InsufficientFunds(TransferError):
     pass
-class IdentacalAccounts(TransferError):
+
+
+class SameAccount(TransferError):
     pass
-class UncorrectAmount(TransferError):
+
+
+class InvalidAmount(TransferError):
     pass
+
+
 class DifferentCurrency(TransferError):
     pass
-class ElsesAccount(TransferError):
+
+
+class ForeignAccount(TransferError):
     pass

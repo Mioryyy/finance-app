@@ -9,8 +9,8 @@ from app.database import Base
 from app.models.account import Account  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.transaction import Transaction  # noqa: F401
-from app.models.user import User  # noqa: F401
 from app.models.transfer import Transfer  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 load_dotenv()
 db_password = os.getenv("DB_PASSWORD")
