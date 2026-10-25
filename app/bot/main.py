@@ -13,14 +13,16 @@ from app.bot.handlers.history import router as history_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
 from app.bot.handlers.transaction import router as add_transaction_router
+from app.bot.handlers.transfer import router as transfer_router
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
-dp.include_router(accounts_router)
 dp.include_router(cancel_router)
+dp.include_router(accounts_router)
+dp.include_router(transfer_router)
 dp.include_router(start_router)
 dp.include_router(history_router)
 dp.include_router(add_category_router)
@@ -36,6 +38,7 @@ commands = [
     BotCommand(command="cancel", description="Отменяет действие"),
     BotCommand(command="accounts", description="Показать доступные счета"),
     BotCommand(command="create_account", description="Создать новый счет"),
+    BotCommand(command="transfer", description="Перевести деньги на другой счет"),
 ]
 
 

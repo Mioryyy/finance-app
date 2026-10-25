@@ -17,3 +17,8 @@ class AccountStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_type = State()
     waiting_for_currency = State()
+
+
+class TransferStates(StatesGroup):
+    waiting_for_to_account = State()
+    waiting_for_amount = State()
