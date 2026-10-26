@@ -22,3 +22,4 @@ class AccountStates(StatesGroup):
 class TransferStates(StatesGroup):
     waiting_for_to_account = State()
     waiting_for_amount = State()
+    waiting_for_accept = State()
