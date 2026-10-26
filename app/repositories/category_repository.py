@@ -49,6 +49,19 @@ async def get_category(session: AsyncSession, category_id: int):
     return category
 
 
+async def get_user_category(
+    session: AsyncSession, category_id: int, user_id: int, category_type: str
+):
+    stmt = select(Category).where(
+        Category.id == category_id,
+        or_(Category.owner_id.is_(None), Category.owner_id == user_id),
+        Category.type == category_type,
+    )
+    result = await session.execute(stmt)
+    category = result.scalar_one_or_none()
+    return category
+
+
 async def show_category(answer_func, state: FSMContext, tx_type: str, user_id: int):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, user_id)

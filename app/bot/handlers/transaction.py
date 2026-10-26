@@ -12,7 +12,7 @@ from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.parsing import parse_amount
 from app.repositories.account_repository import get_account
-from app.repositories.category_repository import get_category, show_category
+from app.repositories.category_repository import get_user_category, show_category
 from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
 
@@ -116,6 +116,10 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
     tr_date = data["tr_date"]
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        category = await get_user_category(session, category_id, user.id, tx_type)
+        if category is None:
+            await callback.answer("Категория не найдена", show_alert=True)
+            return
         await create_transaction(
             session,
             user.active_account_id,
@@ -125,7 +129,6 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
             tx_type,
             tr_date,
         )
-        category = await get_category(session, category_id)
         account = await get_account(session, user.active_account_id)
         currency_symbol = CURRENCY_SYMBOLS.get(account.currency, account.currency)
         category_name = category.name
