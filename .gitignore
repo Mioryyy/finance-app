@@ -1,5 +1,4 @@
 .env
 venv/
-alembic.ini
 __pycache__/
 .idea
