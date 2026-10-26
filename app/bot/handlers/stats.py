@@ -1,3 +1,4 @@
+import html
 from datetime import date, datetime
 
 from aiogram import Router
@@ -40,7 +41,7 @@ async def show_stats(message: Message):
         currency_symbol = CURRENCY_SYMBOLS[account.currency]
         lines = []
         for name, amount in stats:
-            lines.append(f"{name}: {amount} {currency_symbol}")
+            lines.append(f"{html.escape(name)}: {amount} {currency_symbol}")
         text = "\n".join(lines)
         total = sum(amount for _, amount in stats)
         await message.answer(f"Расходы:\n\n{text}\n\nИтого: {total} {currency_symbol}")

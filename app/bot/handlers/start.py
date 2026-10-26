@@ -1,3 +1,5 @@
+import html
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -74,5 +76,7 @@ async def process_account_currency(callback: CallbackQuery, state: FSMContext):
         account = await create_account(session, user.id, name, account_type, currency)
         await set_active_account(session, user, account.id)
         await session.commit()
-    await callback.message.answer(f"Создан счет\n{acctype} {name} в валюте {currency}")
+    await callback.message.answer(
+        f"Создан счёт\n{acctype} {html.escape(name)} в валюте {currency}"
+    )
     await state.clear()

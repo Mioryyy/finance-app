@@ -1,4 +1,5 @@
 import asyncio
+import html
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -121,13 +122,17 @@ async def process_category_emoji(message: Message, state: FSMContext):
         currency_symbol,
     ) = await finalize_category_creation(message.from_user.id, new_category_name, data)
     if transaction_created:
-        await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
+        await message.answer(
+            f"✅ Категория <b>{html.escape(new_category_name)}</b> добавлена"
+        )
         await asyncio.sleep(1)
         await message.answer(
-            f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{new_category_name}</b>"
+            f"✅ Транзакция <b>{html.escape(description)}</b> ({amount}{currency_symbol}) записана в категорию <b>{html.escape(new_category_name)}</b>"
         )
     else:
-        await message.answer(f"✅ Категория <b>{new_category_name}</b> добавлена")
+        await message.answer(
+            f"✅ Категория <b>{html.escape(new_category_name)}</b> добавлена"
+        )
     await state.clear()
 
 
@@ -143,15 +148,15 @@ async def process_skip_emoji(callback: CallbackQuery, state: FSMContext):
     ) = await finalize_category_creation(callback.from_user.id, new_category_name, data)
     if expense_created:
         await callback.message.answer(
-            f"✅ Категория <b>{new_category_name}</b> добавлена"
+            f"✅ Категория <b>{html.escape(new_category_name)}</b> добавлена"
         )
         await asyncio.sleep(1)
         await callback.message.answer(
-            f"✅ Транзакция <b>{description}</b> ({amount}{currency_symbol}) записана в категорию <b>{new_category_name}</b>"
+            f"✅ Транзакция <b>{html.escape(description)}</b> ({amount}{currency_symbol}) записана в категорию <b>{html.escape(new_category_name)}</b>"
         )
     else:
         await callback.message.answer(
-            f"✅ Категория <b>{new_category_name}</b> добавлена"
+            f"✅ Категория <b>{html.escape(new_category_name)}</b> добавлена"
         )
     await callback.answer()
     await state.clear()
