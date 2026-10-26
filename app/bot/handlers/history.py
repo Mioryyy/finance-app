@@ -5,7 +5,8 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.bot.texts import account_label
+from app import exceptions as exc
+from app.bot.texts import CANT_DELETE_INCOME_TEXT, account_label
 from app.constants import CURRENCY_SYMBOLS, TX_TYPES
 from app.database import async_session_maker
 from app.repositories.account_repository import get_account
@@ -134,9 +135,14 @@ async def callback_delete_confirm(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, telegram_id)
-        if await delete_transaction_by_id(
-            session, transaction_id, user.active_account_id
-        ):
+        try:
+            deleted = await delete_transaction_by_id(
+                session, transaction_id, user.active_account_id
+            )
+        except exc.InsufficientFunds:
+            await callback.answer(CANT_DELETE_INCOME_TEXT, show_alert=True)
+            return
+        if deleted:
             await session.commit()
         else:
             await callback.answer("Запись уже удалена", show_alert=True)

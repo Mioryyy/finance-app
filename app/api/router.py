@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
+from app import exceptions as exc
 from app.api.schemas import TransactionCreate
 from app.database import async_session_maker
 from app.repositories.transaction_repository import (
@@ -9,6 +10,8 @@ from app.repositories.transaction_repository import (
 )
 
 router = APIRouter()
+
+NOT_ENOUGH_MONEY = "Недостаточно средств: баланс счёта ушёл бы в минус"
 
 
 @router.get("/transactions")
@@ -21,23 +24,32 @@ async def get_transactions_api(account_id: int):
 @router.post("/transactions")
 async def create_transaction_api(data: TransactionCreate):
     async with async_session_maker() as session:
-        transaction = await create_transaction(
-            session,
-            data.account_id,
-            data.category_id,
-            data.description,
-            data.amount,
-            data.tx_type,
-            data.date,
-        )
+        try:
+            transaction = await create_transaction(
+                session,
+                data.account_id,
+                data.category_id,
+                data.description,
+                data.amount,
+                data.tx_type,
+                data.date,
+            )
+        except exc.InsufficientFunds:
+            raise HTTPException(status_code=409, detail=NOT_ENOUGH_MONEY) from None
         await session.commit()
     return transaction
 
 
 @router.delete("/transactions/{transaction_id}")
-async def delete_transaction_api(transaction_id):
+async def delete_transaction_api(transaction_id: int, account_id: int):
     async with async_session_maker() as session:
-        delete_transaction = await delete_transaction_by_id(session, transaction_id)
+        try:
+            deleted = await delete_transaction_by_id(
+                session, transaction_id, account_id
+            )
+        except exc.InsufficientFunds:
+            raise HTTPException(status_code=409, detail=NOT_ENOUGH_MONEY) from None
         await session.commit()
-    if delete_transaction:
-        return f"Транзакция {transaction_id} удалена"
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Транзакция не найдена")
+    return f"Транзакция {transaction_id} удалена"

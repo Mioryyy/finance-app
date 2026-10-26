@@ -7,8 +7,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app import exceptions as exc
 from app.bot.states import TransactionStates
-from app.bot.texts import account_label
+from app.bot.texts import (
+    CANT_DELETE_INCOME_TEXT,
+    account_label,
+    negative_balance_warning,
+    not_enough_money_text,
+)
 from app.constants import CURRENCY_SYMBOLS, TX_TYPES
 from app.database import async_session_maker
 from app.parsing import parse_entry
@@ -148,24 +154,32 @@ async def handle_category_callback(callback: CallbackQuery, state: FSMContext):
         if account is None or category is None:
             await callback.answer("Счёт или категория не найдены", show_alert=True)
             return
-        transaction = await create_transaction(
-            session,
-            account.id,
-            category_id,
-            description,
-            amount,
-            tx_type,
-            tr_date,
-        )
+        currency_symbol = data["currency_symbol"]
+        try:
+            transaction = await create_transaction(
+                session,
+                account.id,
+                category_id,
+                description,
+                amount,
+                tx_type,
+                tr_date,
+            )
+        except exc.InsufficientFunds:
+            text = not_enough_money_text(account, currency_symbol)
+            await state.clear()
+            await callback.message.edit_text(text)
+            await callback.answer()
+            return
         await session.refresh(account)
         # после commit объекты протухают (expire_on_commit), поэтому всё берём до него
-        currency_symbol = data["currency_symbol"]
         text = (
             f"✅ Записано: <b>{html.escape(description) or 'без описания'}</b> "
             f"{TX_TYPES[tx_type]}{amount} {currency_symbol} → "
             f"{html.escape(category.name)}\n"
             f"{account_label(account)} · {format_date(tr_date)} · "
             f"баланс {account.balance} {currency_symbol}"
+            f"{negative_balance_warning(account.balance)}"
         )
         undo_data = f"undo:{transaction.id}:{account.id}"
         await session.commit()
@@ -189,9 +203,13 @@ async def undo_transaction(callback: CallbackQuery):
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, callback.from_user.id)
         account = await get_user_account(session, int(account_id), user.id)
-        deleted = account is not None and await delete_transaction_by_id(
-            session, int(transaction_id), account.id
-        )
+        try:
+            deleted = account is not None and await delete_transaction_by_id(
+                session, int(transaction_id), account.id
+            )
+        except exc.InsufficientFunds:
+            await callback.answer(CANT_DELETE_INCOME_TEXT, show_alert=True)
+            return
         if not deleted:
             await callback.answer("Операция уже удалена", show_alert=True)
             await callback.message.edit_reply_markup(reply_markup=None)

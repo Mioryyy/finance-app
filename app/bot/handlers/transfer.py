@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app import exceptions as exc
 from app.bot.states import TransferStates
-from app.bot.texts import account_label
+from app.bot.texts import account_label, negative_balance_warning
 from app.constants import ACCOUNT_TYPES_EMOJI, CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.parsing import parse_amount
@@ -173,6 +173,15 @@ async def confirm_transfer(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_text(f"❌ Ошибка\n{text}")
             await callback.answer()
             return
+        account_from = await get_account(session, data["account_from_id"])
+        # счёт уже лежит в сессии со старым балансом, перечитываем его из базы
+        await session.refresh(account_from)
+        text = (
+            "Перевод прошёл успешно\n"
+            f"{account_label(account_from)} · баланс {account_from.balance} "
+            f"{CURRENCY_SYMBOLS[account_from.currency]}"
+            f"{negative_balance_warning(account_from.balance)}"
+        )
         await session.commit()
-    await callback.message.edit_text("Перевод прошёл успешно")
+    await callback.message.edit_text(text)
     await callback.answer()

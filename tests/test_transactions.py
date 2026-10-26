@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from app.models.account import Account
 from app.repositories.account_repository import create_account
 from app.repositories.category_repository import get_or_create_default_category
@@ -10,7 +12,9 @@ from app.repositories.user_repository import get_or_create_user
 
 async def test_delete_expense_restores_balance(session):
     user, _ = await get_or_create_user(session, 12345)
-    account = await create_account(session, user.id, "test", "cash", "USD")
+    account = await create_account(
+        session, user.id, "test", "cash", "USD", initial_balance=Decimal("100")
+    )
     category = await get_or_create_default_category(session, "test", "expense")
     transaction = await create_transaction(
         session, account.id, category.id, "test_transaction", 100, category.type
@@ -19,12 +23,12 @@ async def test_delete_expense_restores_balance(session):
     transaction_id = transaction.id
     session.expire_all()
     account = await session.get(Account, account_id)
-    assert account.balance == -100
+    assert account.balance == 0
     deleted = await delete_transaction_by_id(session, transaction_id, account_id)
     session.expire_all()
     account = await session.get(Account, account_id)
     assert deleted
-    assert account.balance == 0
+    assert account.balance == 100
 
 
 async def test_delete_income_reduces_balance(session):
@@ -48,7 +52,9 @@ async def test_delete_income_reduces_balance(session):
 
 async def test_delete_foreign_transaction_returns_false(session):
     user, _ = await get_or_create_user(session, 12345)
-    account = await create_account(session, user.id, "test", "cash", "USD")
+    account = await create_account(
+        session, user.id, "test", "cash", "USD", initial_balance=Decimal("100")
+    )
     account_id = account.id
     category = await get_or_create_default_category(session, "test", "expense")
     transaction = await create_transaction(
@@ -62,7 +68,7 @@ async def test_delete_foreign_transaction_returns_false(session):
     deleted = await delete_transaction_by_id(session, transaction_id, account1_id)
     assert not deleted
     account = await session.get(Account, account_id)
-    assert account.balance == -100
+    assert account.balance == 0
 
 
 async def test_delete_missing_transaction_returns_false(session):

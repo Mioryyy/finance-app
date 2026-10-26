@@ -25,8 +25,10 @@ async def create_transfer(
         raise exc.DifferentCurrency
     if amount <= 0:
         raise exc.InvalidAmount
-    if from_account.balance < amount:
-        raise exc.InsufficientFunds
+    # списание первым: если денег не хватит, update_balance кинет
+    # InsufficientFunds раньше, чем перевод попадёт в сессию
+    await update_balance(session, from_account_id, -amount)
+    await update_balance(session, to_account_id, amount)
     new_transfer = Transfer(
         from_account_id=from_account_id,
         to_account_id=to_account_id,
@@ -34,7 +36,5 @@ async def create_transfer(
         date=date.today(),
     )
     session.add(new_transfer)
-    await update_balance(session, from_account_id, -amount)
-    await update_balance(session, to_account_id, amount)
     await session.flush()
     return new_transfer

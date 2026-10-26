@@ -7,6 +7,26 @@ def account_label(account):
     return f"{ACCOUNT_TYPES_EMOJI[account.type]} {html.escape(account.name)}"
 
 
+def not_enough_money_text(account, currency_symbol):
+    return (
+        f"❌ Не хватает денег: на {account_label(account)} "
+        f"{account.balance} {currency_symbol}.\n"
+        "Запиши сначала доход (<i>+500 зарплата</i>) "
+        "или переключи счёт: /accounts"
+    )
+
+
+def negative_balance_warning(balance):
+    # только карта может уйти в минус, остальным не даст update_balance
+    return "\n⚠️ Баланс ушёл в минус" if balance < 0 else ""
+
+
+CANT_DELETE_INCOME_TEXT = (
+    "Нельзя удалить: на счёте получится минус. "
+    "Сначала удали траты, сделанные из этих денег"
+)
+
+
 START_TEXT = (
     "👋 Привет! Я помогу вести учёт денег: траты, доходы и несколько счетов.\n\n"
     "💸 Трата — описание и сумма: <i>кофе 5</i>\n"
