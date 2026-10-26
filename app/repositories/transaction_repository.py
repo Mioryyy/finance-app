@@ -36,13 +36,15 @@ async def create_transaction(
     return new_transaction
 
 
-async def get_stats(session: AsyncSession, account_id, period: date):
+async def get_stats(
+    session: AsyncSession, account_id, period: date, category_type="expense"
+):
     stmt = (
         select(Category.name, func.sum(Transaction.amount))
         .join(Category, Transaction.category_id == Category.id)
         .where(
             Transaction.account_id == account_id,
-            Category.type == "expense",
+            Category.type == category_type,
             func.extract("month", Transaction.date) == period.month,
             func.extract("year", Transaction.date) == period.year,
         )

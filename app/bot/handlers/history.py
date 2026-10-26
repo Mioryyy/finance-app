@@ -5,6 +5,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.bot.texts import account_label
 from app.constants import CURRENCY_SYMBOLS, TX_TYPES
 from app.database import async_session_maker
 from app.repositories.account_repository import get_account
@@ -45,9 +46,12 @@ async def build_history_page(telegram_id, page):
             has_more, transactions = await get_recent_transactions(
                 session, user.active_account_id, page
             )
+        header = (
+            f"{account_label(account)} · баланс {account.balance} {currency_symbol}"
+        )
         if len(transactions) == 0:
-            return "Пока нет операций", None
-        text_list = ["Вот твои последние операции\n"]
+            return f"{header}\n\nНа этом счёте пока нет операций", None
+        text_list = [f"{header}\n\nПоследние операции:"]
         builder = InlineKeyboardBuilder()
         for number, (transaction, category_name, category_type) in enumerate(
             transactions, start=1

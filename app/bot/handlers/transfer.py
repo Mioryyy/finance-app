@@ -9,6 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app import exceptions as exc
 from app.bot.states import TransferStates
+from app.bot.texts import account_label
 from app.constants import ACCOUNT_TYPES_EMOJI, CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.parsing import parse_amount
@@ -88,8 +89,13 @@ async def start_transfer_creation(message: Message, state: FSMContext):
         await message.answer(message_txt)
         await state.clear()
         return
+    currency_symbol = CURRENCY_SYMBOLS[account.currency]
     await message.answer(
-        f"На какой счёт перевести?\n{message_txt}", reply_markup=keyboard
+        f"Перевод со счёта {account_label(account)} "
+        f"(баланс {account.balance} {currency_symbol})\n"
+        "Сменить счёт-источник: /accounts\n\n"
+        f"На какой счёт перевести?\n{message_txt}",
+        reply_markup=keyboard,
     )
     await state.set_state(TransferStates.waiting_for_to_account)
 

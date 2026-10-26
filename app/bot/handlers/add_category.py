@@ -11,7 +11,9 @@ from app.bot.states import CategoryStates
 from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.models.category import Category
+from app.parsing import looks_like_emoji
 from app.repositories.account_repository import get_account
+from app.repositories.category_repository import category_name_exists
 from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
 
@@ -87,6 +89,14 @@ async def process_category_name(message: Message, state: FSMContext):
     if not new_category_name:
         await message.answer("Отправь название категории текстом")
         return
+    async with async_session_maker() as session:
+        user, _ = await get_or_create_user(session, message.from_user.id)
+        exists = await category_name_exists(session, user.id, new_category_name)
+    if exists:
+        await message.answer(
+            "Такая категория уже есть. Напиши другое название или нажми /cancel"
+        )
+        return
     await state.update_data(new_category_name=new_category_name)
     data = await state.get_data()
 
@@ -116,8 +126,8 @@ async def process_category_type(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CategoryStates.waiting_for_emoji)
 async def process_category_emoji(message: Message, state: FSMContext):
-    if not message.text:
-        await message.answer("Отправь эмодзи сообщением или нажми «Пропустить»")
+    if not looks_like_emoji(message.text):
+        await message.answer("Отправь один эмодзи или нажми «Пропустить»")
         return
     data = await state.get_data()
     new_category_name = f"{message.text} {data['new_category_name']}"

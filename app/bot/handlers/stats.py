@@ -5,6 +5,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from app.bot.texts import account_label
 from app.constants import CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.repositories.account_repository import get_account
@@ -33,15 +34,25 @@ async def show_stats(message: Message):
                 "❌ У тебя ещё нет счёта. Набери /start, чтобы создать его."
             )
             return
-        stats = await get_stats(session, user.active_account_id, period)
-        if not stats:
-            await message.answer("У вас еще нет расходов за этот месяц")
-            return
         account = await get_account(session, user.active_account_id)
+        expenses = await get_stats(session, account.id, period, "expense")
+        incomes = await get_stats(session, account.id, period, "income")
+        header = f"📊 {account_label(account)} · {period.strftime('%m.%Y')}"
+        if not expenses and not incomes:
+            await message.answer(f"{header}\n\nЗа этот месяц операций нет")
+            return
         currency_symbol = CURRENCY_SYMBOLS[account.currency]
-        lines = []
-        for name, amount in stats:
-            lines.append(f"{html.escape(name)}: {amount} {currency_symbol}")
-        text = "\n".join(lines)
-        total = sum(amount for _, amount in stats)
-        await message.answer(f"Расходы:\n\n{text}\n\nИтого: {total} {currency_symbol}")
+    lines = [header, "", "<b>Расходы</b>"]
+    for name, amount in expenses:
+        lines.append(f"{html.escape(name)}: {amount} {currency_symbol}")
+    if not expenses:
+        lines.append("нет")
+    total_expense = sum(amount for _, amount in expenses)
+    total_income = sum(amount for _, amount in incomes)
+    lines += [
+        "",
+        f"Итого расходов: {total_expense} {currency_symbol}",
+        f"Доходы: {total_income} {currency_symbol}",
+        f"Разница: {total_income - total_expense:+} {currency_symbol}",
+    ]
+    await message.answer("\n".join(lines))

@@ -24,6 +24,23 @@ async def get_categories_for_user(session: AsyncSession, user_id: int, category_
     return categories
 
 
+def base_category_name(name: str) -> str:
+    # «🍔 Еда» и «еда» считаются одной категорией: убираем эмодзи в начале и регистр
+    index = 0
+    while index < len(name) and not name[index].isalnum():
+        index += 1
+    return name[index:].strip().lower()
+
+
+async def category_name_exists(session: AsyncSession, user_id: int, name: str):
+    stmt = select(Category.name).where(
+        or_(Category.owner_id.is_(None), Category.owner_id == user_id)
+    )
+    result = await session.execute(stmt)
+    target = base_category_name(name)
+    return any(base_category_name(existing) == target for existing in result.scalars())
+
+
 async def get_or_create_default_category(
     session: AsyncSession, name: str, category_type: str
 ):
@@ -62,7 +79,13 @@ async def get_user_category(
     return category
 
 
-async def show_category(answer_func, state: FSMContext, tx_type: str, user_id: int):
+async def show_category(
+    answer_func,
+    state: FSMContext,
+    tx_type: str,
+    user_id: int,
+    text: str = "Выбери категорию",
+):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, user_id)
         categories = await get_categories_for_user(session, user.id, tx_type)
@@ -73,11 +96,12 @@ async def show_category(answer_func, state: FSMContext, tx_type: str, user_id: i
     adjust = [2] * (n // 2)
     if n % 2 == 1:
         adjust.append(1)
+    builder.button(text="📅 Другая дата", callback_data="date:pick")
     builder.button(text="➕ Добавить категорию", callback_data="category_add")
-    adjust.append(1)
+    adjust.append(2)
     builder.button(text="❌ Отмена", callback_data="cancel")
     adjust.append(1)
     builder.adjust(*adjust)
     keyboard = builder.as_markup()
-    await answer_func(text="Выбери категорию", reply_markup=keyboard)
+    await answer_func(text=text, reply_markup=keyboard)
     await state.set_state(TransactionStates.waiting_for_category)
