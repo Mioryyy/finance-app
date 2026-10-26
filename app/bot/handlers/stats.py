@@ -24,6 +24,7 @@ async def show_stats(message: Message):
             period = date.today()  # noqa: DTZ011
     except ValueError:
         await message.answer("Напиши команду в формате /stats мм.гггг")
+        return
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, message.from_user.id)
         if user.active_account_id is None:
