@@ -84,6 +84,9 @@ async def callback_add_category(callback: CallbackQuery, state: FSMContext):
 @router.message(CategoryStates.waiting_for_new_category_name)
 async def process_category_name(message: Message, state: FSMContext):
     new_category_name = message.text
+    if not new_category_name:
+        await message.answer("Отправь название категории текстом")
+        return
     await state.update_data(new_category_name=new_category_name)
     data = await state.get_data()
 
@@ -113,6 +116,9 @@ async def process_category_type(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CategoryStates.waiting_for_emoji)
 async def process_category_emoji(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Отправь эмодзи сообщением или нажми «Пропустить»")
+        return
     data = await state.get_data()
     new_category_name = f"{message.text} {data['new_category_name']}"
     (

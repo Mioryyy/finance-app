@@ -36,6 +36,9 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.message(AccountStates.waiting_for_name)
 async def process_account_name(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Отправь название счёта текстом")
+        return
     await state.update_data(account_name=message.text)
     builder = InlineKeyboardBuilder()
     builder.button(text="💳 Карта", callback_data="acctype:card")

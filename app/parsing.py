@@ -1,7 +1,9 @@
 from decimal import Decimal, InvalidOperation
 
 
-def parse_amount(text: str):
+def parse_amount(text: str | None):
+    if not text:
+        return None
     text = text.replace(",", ".")
     try:
         amount = Decimal(text)

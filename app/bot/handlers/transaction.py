@@ -90,6 +90,9 @@ async def process_date_manual(callback: CallbackQuery, state: FSMContext):
 @router.message(TransactionStates.waiting_for_date)
 async def parse_date_manual(message: Message, state: FSMContext):
     text = message.text
+    if not text:
+        await message.answer("Напиши дату в формате дд.мм.гггг!")
+        return
     try:
         tr_date = datetime.strptime(text, "%d.%m.%Y").date()  # noqa: DTZ007
     except ValueError:
