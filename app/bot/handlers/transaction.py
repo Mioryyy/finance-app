@@ -23,6 +23,9 @@ router = Router()
 async def add_transaction(message: Message, state: FSMContext):
     if not message.text:
         return
+    if message.text.startswith("/"):
+        await message.answer("Не знаю такой команды 🤔\nСписок команд: /help")
+        return
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, message.from_user.id)
         if user.active_account_id is None:

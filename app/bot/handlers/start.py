@@ -7,14 +7,13 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.states import AccountStates
+from app.bot.texts import ACCOUNT_CREATED_HINT, ACCOUNT_NAME_PROMPT, START_TEXT
 from app.constants import ACCOUNT_TYPES, CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.repositories.account_repository import create_account
 from app.repositories.user_repository import get_or_create_user, set_active_account
 
 router = Router()
-
-start_text = "👋 Привет! Я помогу тебе следить за расходами.\n\n💸 Чтобы добавить трату, просто напиши описание и сумму:\nкофе 50\n\n🏷 Есть готовые категории, а если чего-то не хватает — можно создать свою через /add_category\n\n"
 
 
 @router.message(Command("start"))
@@ -25,13 +24,13 @@ async def cmd_start(message: Message, state: FSMContext):
         await session.commit()
     if user.active_account_id is None:
         await message.answer(
-            f"{start_text}Для начала создадим твой первый счет👇",
+            f"{START_TEXT}Для начала создадим твой первый счёт 👇",
         )
-        await message.answer("Как его назовём?")
+        await message.answer(ACCOUNT_NAME_PROMPT)
         await state.set_state(AccountStates.waiting_for_name)
         return
 
-    await message.answer(f"{start_text}Погнали! Напиши свою первую трату 👇")
+    await message.answer(f"{START_TEXT}С возвращением! Напиши трату 👇")
 
 
 @router.message(AccountStates.waiting_for_name)
@@ -45,7 +44,7 @@ async def process_account_name(message: Message, state: FSMContext):
     builder.button(text="💵 Наличные", callback_data="acctype:cash")
     builder.button(text="🪙 Криптовалюта", callback_data="acctype:crypto")
     keyboard = builder.as_markup()
-    await message.answer("Какой тип будет у счета?", reply_markup=keyboard)
+    await message.answer("Какой тип будет у счёта?", reply_markup=keyboard)
     await state.set_state(AccountStates.waiting_for_type)
 
 
@@ -59,7 +58,7 @@ async def process_account_type(callback: CallbackQuery, state: FSMContext):
         builder.button(text=key, callback_data=f"curr:{key}")
     builder.adjust(2)
     keyboard = builder.as_markup()
-    await callback.message.answer("Какая валюта будет у счета?", reply_markup=keyboard)
+    await callback.message.answer("Какая валюта будет у счёта?", reply_markup=keyboard)
     await callback.answer()
     await state.set_state(AccountStates.waiting_for_currency)
 
@@ -80,6 +79,7 @@ async def process_account_currency(callback: CallbackQuery, state: FSMContext):
         await set_active_account(session, user, account.id)
         await session.commit()
     await callback.message.answer(
-        f"Создан счёт\n{acctype} {html.escape(name)} в валюте {currency}"
+        f"✅ Создан счёт {acctype} <b>{html.escape(name)}</b> в валюте {currency}\n\n"
+        f"{ACCOUNT_CREATED_HINT}"
     )
     await state.clear()

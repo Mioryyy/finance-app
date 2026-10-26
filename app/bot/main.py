@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
 from app.bot.handlers.cancel import router as cancel_router
+from app.bot.handlers.help import router as help_router
 from app.bot.handlers.history import router as history_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
@@ -21,6 +22,7 @@ bot_token = os.getenv("BOT_TOKEN")
 bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 dp.include_router(cancel_router)
+dp.include_router(help_router)
 dp.include_router(accounts_router)
 dp.include_router(transfer_router)
 dp.include_router(start_router)
@@ -31,14 +33,15 @@ dp.include_router(add_transaction_router)
 
 
 commands = [
-    BotCommand(command="start", description="Начать работу с ботом"),
+    BotCommand(command="history", description="Последние операции"),
+    BotCommand(command="stats", description="Расходы по категориям за месяц"),
+    BotCommand(command="accounts", description="Счета и балансы"),
+    BotCommand(command="transfer", description="Перевод между своими счетами"),
     BotCommand(command="add_category", description="Добавить свою категорию"),
-    BotCommand(command="history", description="Посмотреть последние 10 операций"),
-    BotCommand(command="stats", description="Статистика расходов за месяц"),
-    BotCommand(command="cancel", description="Отменяет действие"),
-    BotCommand(command="accounts", description="Показать доступные счета"),
-    BotCommand(command="create_account", description="Создать новый счет"),
-    BotCommand(command="transfer", description="Перевести деньги на другой счет"),
+    BotCommand(command="create_account", description="Создать новый счёт"),
+    BotCommand(command="help", description="Как пользоваться ботом"),
+    BotCommand(command="cancel", description="Отменить текущее действие"),
+    BotCommand(command="start", description="Начать заново"),
 ]
 
 

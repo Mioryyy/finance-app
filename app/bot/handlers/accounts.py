@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.states import AccountStates
+from app.bot.texts import ACCOUNT_NAME_PROMPT
 from app.constants import ACCOUNT_TYPES_EMOJI, CURRENCY_SYMBOLS
 from app.database import async_session_maker
 from app.repositories.account_repository import get_accounts_for_user, get_user_account
@@ -54,8 +55,7 @@ async def build_accounts_page(telegram_id):
 
 async def start_account_creation(send_func, state):
     await state.clear()
-    await send_func("Создаем новый счет")
-    await send_func("Как его назовём?")
+    await send_func(f"Создаём новый счёт.\n{ACCOUNT_NAME_PROMPT}")
     await state.set_state(AccountStates.waiting_for_name)
 
 
