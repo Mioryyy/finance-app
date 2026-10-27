@@ -157,6 +157,7 @@ uvicorn app.api.main:app --reload
 |---|---|
 | `BOT_TOKEN` | Токен бота, который выдаёт [@BotFather](https://t.me/BotFather) |
 | `DB_PASSWORD` | Пароль пользователя `postgres` в базе данных |
+| `DB_HOST` | Адрес базы. Необязательная: по умолчанию `localhost`, в Docker Compose — `db` |
 
 ## Структура проекта
 

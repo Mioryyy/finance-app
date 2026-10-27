@@ -1,13 +1,37 @@
 services:
   db:
-    image: postgres
+    # мажорную версию не меняем без переноса данных: старый том с новой не запустится
+    image: postgres:18
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?задай DB_PASSWORD в .env}
       POSTGRES_DB: finance
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # с PostgreSQL 18 данные лежат в /var/lib/postgresql/18/docker,
+      # поэтому том подключаем на уровень выше, а не в /data
+      - postgres_data:/var/lib/postgresql
+    # «контейнер запущен» ещё не значит «база принимает подключения»:
+    # pg_isready проверяет второе, и бот ждёт именно его
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finance"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bot:
+    build: .
+    restart: unless-stopped
+    # BOT_TOKEN и DB_PASSWORD приходят из .env, а не из образа
+    env_file: .env
+    environment:
+      # внутри сети compose база доступна по имени сервиса;
+      # environment важнее env_file, поэтому перекрывает DB_HOST из .env, если он там есть
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:

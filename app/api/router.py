@@ -37,6 +37,9 @@ async def create_transaction_api(data: TransactionCreate):
         except exc.InsufficientFunds:
             raise HTTPException(status_code=409, detail=NOT_ENOUGH_MONEY) from None
         await session.commit()
+        # commit делает объект устаревшим; перечитываем, пока сессия открыта,
+        # иначе FastAPI упадёт при сериализации ответа
+        await session.refresh(transaction)
     return transaction
 
 
