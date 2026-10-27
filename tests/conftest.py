@@ -1,5 +1,6 @@
 import os
 
+import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from sqlalchemy import text
@@ -19,6 +20,27 @@ TEST_DATABASE_URL = (
     f"postgresql+asyncpg://postgres:{db_password}@localhost:5432/finance_test"
 )
 assert TEST_DATABASE_URL.endswith("finance_test")
+
+
+@pytest.fixture(autouse=True)
+def _no_ai_by_default(monkeypatch):
+    # .env подгружается и в тестах: без этого они ходили бы в настоящий Groq.
+    # Тесты ИИ задают ключ сами и подменяют сетевой вызов
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+
+@pytest_asyncio.fixture
+async def session_maker():
+    # для тестов хендлеров: они сами открывают сессии, поэтому нужна фабрика,
+    # а не одна готовая сессия. Работает с той же отдельной БД finance_test
+    engine = create_async_engine(TEST_DATABASE_URL)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield async_sessionmaker(engine, class_=AsyncSession)
+    async with engine.begin() as conn:
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture

@@ -1,11 +1,13 @@
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.states import TransactionStates
 from app.database import async_session_maker
+from app.models.account import Account
 from app.models.category import Category
+from app.models.transaction import Transaction
 from app.repositories.user_repository import get_or_create_user
 
 
@@ -39,6 +41,40 @@ async def category_name_exists(session: AsyncSession, user_id: int, name: str):
     result = await session.execute(stmt)
     target = base_category_name(name)
     return any(base_category_name(existing) == target for existing in result.scalars())
+
+
+async def guess_category_from_history(
+    session: AsyncSession, user_id: int, description: str | None, category_type: str
+):
+    # в какую категорию пользователь чаще всего записывал такое описание:
+    # «Кофе», «кофе » и «КОФЕ» считаются одним и тем же
+    normalized = (description or "").strip().lower()
+    if not normalized:
+        return None
+    stmt = (
+        select(Category)
+        .join(Transaction, Transaction.category_id == Category.id)
+        .join(Account, Account.id == Transaction.account_id)
+        .where(
+            # все счета пользователя, а не только активный; чужие операции не берём
+            Account.owner_id == user_id,
+            func.lower(func.trim(Transaction.description)) == normalized,
+            Category.type == category_type,
+            # категория должна быть доступна пользователю: общая или своя
+            or_(Category.owner_id.is_(None), Category.owner_id == user_id),
+        )
+        .group_by(Category.id)
+        # чаще всего; при равенстве — та, что использовалась позже;
+        # id в конце делает выбор детерминированным
+        .order_by(
+            func.count(Transaction.id).desc(),
+            func.max(Transaction.date).desc(),
+            Category.id,
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 async def get_or_create_default_category(
@@ -85,6 +121,7 @@ async def show_category(
     tx_type: str,
     user_id: int,
     text: str = "Выбери категорию",
+    with_back: bool = False,
 ):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, user_id)
@@ -96,11 +133,16 @@ async def show_category(
     adjust = [2] * (n // 2)
     if n % 2 == 1:
         adjust.append(1)
-    builder.button(text="📅 Другая дата", callback_data="date:pick")
     builder.button(text="➕ Добавить категорию", callback_data="category_add")
-    adjust.append(2)
-    builder.button(text="❌ Отмена", callback_data="cancel")
     adjust.append(1)
+    if with_back:
+        # когда категорию меняют из окна подтверждения, можно вернуться без выбора
+        builder.button(text="⬅️ Назад", callback_data="entry:back")
+        builder.button(text="❌ Отмена", callback_data="cancel")
+        adjust.append(2)
+    else:
+        builder.button(text="❌ Отмена", callback_data="cancel")
+        adjust.append(1)
     builder.adjust(*adjust)
     keyboard = builder.as_markup()
     await answer_func(text=text, reply_markup=keyboard)
