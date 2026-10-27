@@ -38,7 +38,9 @@ async def finish_category_creation(send_func, state, telegram_id, name, data):
         await state.clear()
         return
     # категорию создавали прямо из траты: возвращаемся в окно подтверждения с ней
-    await state.update_data(category_id=category_id, category_name=name, guessed=False)
+    await state.update_data(
+        category_id=category_id, category_name=name, guess_source=None
+    )
     await show_confirmation(send_func, state)
 
 

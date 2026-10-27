@@ -31,8 +31,14 @@ def category_prompt(data):
     )
 
 
+GUESS_HINTS = {
+    "history": "\n💡 Категория угадана по твоей истории",
+    "ai": "\n🤖 Категорию предложил ИИ, проверь её",
+}
+
+
 def confirmation_text(data):
-    hint = "\n💡 Категория угадана по твоей истории" if data.get("guessed") else ""
+    hint = GUESS_HINTS.get(data.get("guess_source"), "")
     return (
         f"{entry_head(data)}\n"
         f"🏷 {html.escape(data['category_name'])}\n"

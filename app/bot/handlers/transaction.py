@@ -19,13 +19,36 @@ from app.database import async_session_maker
 from app.parsing import parse_entry
 from app.repositories.account_repository import get_account, get_user_account
 from app.repositories.category_repository import (
+    get_categories_for_user,
     get_user_category,
     guess_category_from_history,
 )
 from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user
+from app.services.ai_categorizer import guess_category_with_ai, is_enabled
 
 router = Router()
+
+
+async def suggest_category(message, user_id, description, tx_type):
+    # сначала история пользователя (бесплатно и точнее всего), потом ИИ.
+    # возвращает (id, название, источник) или None
+    async with async_session_maker() as session:
+        guess = await guess_category_from_history(
+            session, user_id, description, tx_type
+        )
+        if guess:
+            return guess.id, guess.name, "history"
+        if not is_enabled() or not description.strip():
+            return None
+        categories = await get_categories_for_user(session, user_id, tx_type)
+        categories = [(c.id, c.name) for c in categories]
+    # сессия уже закрыта: пока ждём ИИ, соединение с базой не держим
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    category_id = await guess_category_with_ai(description, categories)
+    if category_id is None:
+        return None
+    return category_id, dict(categories)[category_id], "ai"
 
 
 @router.message(StateFilter(None))
@@ -54,10 +77,8 @@ async def add_transaction(message: Message, state: FSMContext):
         )
         return
     description, amount, tx_type = entry
-    async with async_session_maker() as session:
-        guess = await guess_category_from_history(
-            session, user_id, description, tx_type
-        )
+    suggestion = await suggest_category(message, user_id, description, tx_type)
+    category_id, category_name, guess_source = suggestion or (None, None, None)
     await state.update_data(
         description=description,
         amount=amount,
@@ -66,12 +87,12 @@ async def add_transaction(message: Message, state: FSMContext):
         account_id=account.id,
         account_label=account_label(account),
         currency_symbol=CURRENCY_SYMBOLS.get(account.currency, account.currency),
-        category_id=guess.id if guess else None,
-        category_name=guess.name if guess else None,
-        guessed=guess is not None,
+        category_id=category_id,
+        category_name=category_name,
+        guess_source=guess_source,
     )
-    if guess:
-        # категория угадана по истории: сразу показываем окно подтверждения
+    if suggestion:
+        # категория найдена (по истории или ИИ): сразу показываем окно подтверждения
         await show_confirmation(message.answer, state)
     else:
         await ask_category(message.answer, state, message.from_user.id)
@@ -94,7 +115,7 @@ async def choose_category(callback: CallbackQuery, state: FSMContext):
             return
         category_name = category.name
     await state.update_data(
-        category_id=category_id, category_name=category_name, guessed=False
+        category_id=category_id, category_name=category_name, guess_source=None
     )
     await show_confirmation(callback.message.edit_text, state)
     await callback.answer()

@@ -1,5 +1,6 @@
 import os
 
+import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from sqlalchemy import text
@@ -19,6 +20,13 @@ TEST_DATABASE_URL = (
     f"postgresql+asyncpg://postgres:{db_password}@localhost:5432/finance_test"
 )
 assert TEST_DATABASE_URL.endswith("finance_test")
+
+
+@pytest.fixture(autouse=True)
+def _no_ai_by_default(monkeypatch):
+    # .env подгружается и в тестах: без этого они ходили бы в настоящий Groq.
+    # Тесты ИИ задают ключ сами и подменяют сетевой вызов
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
 
 
 @pytest_asyncio.fixture
