@@ -24,9 +24,9 @@ assert TEST_DATABASE_URL.endswith("finance_test")
 
 @pytest.fixture(autouse=True)
 def _no_ai_by_default(monkeypatch):
-    # .env подгружается и в тестах: без этого они ходили бы в настоящий Groq.
+    # .env подгружается и в тестах: без этого они ходили бы в настоящий ИИ-сервис.
     # Тесты ИИ задают ключ сами и подменяют сетевой вызов
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
 
 @pytest_asyncio.fixture
