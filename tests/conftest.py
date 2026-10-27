@@ -22,6 +22,20 @@ assert TEST_DATABASE_URL.endswith("finance_test")
 
 
 @pytest_asyncio.fixture
+async def session_maker():
+    # для тестов хендлеров: они сами открывают сессии, поэтому нужна фабрика,
+    # а не одна готовая сессия. Работает с той же отдельной БД finance_test
+    engine = create_async_engine(TEST_DATABASE_URL)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield async_sessionmaker(engine, class_=AsyncSession)
+    async with engine.begin() as conn:
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
 async def session():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
