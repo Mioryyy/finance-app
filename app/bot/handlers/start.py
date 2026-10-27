@@ -21,8 +21,11 @@ async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, message.from_user.id)
+        # читаем до commit: после него объект протухает (expire_on_commit),
+        # а вне сессии подгрузить значение заново уже нельзя
+        has_account = user.active_account_id is not None
         await session.commit()
-    if user.active_account_id is None:
+    if not has_account:
         await message.answer(
             f"{START_TEXT}Для начала создадим твой первый счёт 👇",
         )
