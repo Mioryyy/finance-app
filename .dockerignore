@@ -1,0 +1,19 @@
+# секреты: токен и пароль приходят через env_file в compose, а не внутри образа
+.env
+
+# окружение и кэши
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# не нужно для работы бота
+.git/
+.idea/
+tests/
+requirements-dev.txt
+CLAUDE.md
+Dockerfile
+.dockerignore
+docker-compose.yml

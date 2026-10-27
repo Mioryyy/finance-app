@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 from aiogram import Bot, Dispatcher
@@ -51,4 +52,10 @@ async def main():
 
 
 if __name__ == "__main__":
+    # без этого aiogram пишет в лог только ошибки, и по `docker compose logs`
+    # не видно, запустился ли polling и приходят ли сообщения
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     asyncio.run(main())
