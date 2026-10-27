@@ -2,7 +2,6 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class TransactionStates(StatesGroup):
-    waiting_for_type = State()
     waiting_for_date = State()
     waiting_for_category = State()
 
@@ -17,3 +16,9 @@ class AccountStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_type = State()
     waiting_for_currency = State()
+
+
+class TransferStates(StatesGroup):
+    waiting_for_to_account = State()
+    waiting_for_amount = State()
+    waiting_for_accept = State()

@@ -20,6 +20,11 @@ async def create_transaction(
 ):
     if tr_date is None:
         tr_date = date.today()  # noqa: DTZ011
+    # баланс первым: при нехватке денег операция не попадёт в сессию
+    if tx_type == "expense":
+        await update_balance(session, account_id, -amount)
+    else:
+        await update_balance(session, account_id, amount)
     new_transaction = Transaction(
         account_id=account_id,
         category_id=category_id,
@@ -28,21 +33,19 @@ async def create_transaction(
         date=tr_date,
     )
     session.add(new_transaction)
-    if tx_type == "expense":
-        await update_balance(session, account_id, -amount)
-    else:
-        await update_balance(session, account_id, amount)
     await session.flush()
     return new_transaction
 
 
-async def get_stats(session: AsyncSession, account_id, period: date):
+async def get_stats(
+    session: AsyncSession, account_id, period: date, category_type="expense"
+):
     stmt = (
         select(Category.name, func.sum(Transaction.amount))
         .join(Category, Transaction.category_id == Category.id)
         .where(
             Transaction.account_id == account_id,
-            Category.type == "expense",
+            Category.type == category_type,
             func.extract("month", Transaction.date) == period.month,
             func.extract("year", Transaction.date) == period.year,
         )

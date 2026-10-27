@@ -15,5 +15,6 @@ async def cancel(message: Message, state: FSMContext):
 @router.callback_query(StateFilter("*"), F.data == "cancel")
 async def cancel_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.answer("Действие отменено")
+    # редактируем сообщение, чтобы старые кнопки не оставались в чате
+    await callback.message.edit_text("Действие отменено")
     await callback.answer()

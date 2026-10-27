@@ -1,12 +1,27 @@
-from sqlalchemy import select, update
+from decimal import Decimal
+
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import exceptions as exc
+from app.constants import OVERDRAFT_ACCOUNT_TYPES
 from app.models.account import Account
 
 
-async def create_account(session: AsyncSession, owner_id, name, account_type, currency):
+async def create_account(
+    session: AsyncSession,
+    owner_id,
+    name,
+    account_type,
+    currency,
+    initial_balance=Decimal("0"),
+):
     new_account = Account(
-        name=name, balance=0, type=account_type, currency=currency, owner_id=owner_id
+        name=name,
+        balance=initial_balance,
+        type=account_type,
+        currency=currency,
+        owner_id=owner_id,
     )
     session.add(new_account)
     await session.flush()
@@ -14,12 +29,25 @@ async def create_account(session: AsyncSession, owner_id, name, account_type, cu
 
 
 async def update_balance(session: AsyncSession, account_id, delta):
+    # проверка остатка и изменение в одном UPDATE: между ними не вклинится
+    # другой запрос, который успеет потратить те же деньги
     stmt = (
         update(Account)
-        .where(Account.id == account_id)
+        .where(
+            Account.id == account_id,
+            or_(
+                Account.type.in_(OVERDRAFT_ACCOUNT_TYPES),
+                Account.balance + delta >= 0,
+            ),
+        )
         .values(balance=Account.balance + delta)
+        .returning(Account.balance)
     )
-    await session.execute(stmt)
+    result = await session.execute(stmt)
+    new_balance = result.scalar_one_or_none()
+    if new_balance is None:
+        raise exc.InsufficientFunds
+    return new_balance
 
 
 async def get_accounts_for_user(session: AsyncSession, user_id):

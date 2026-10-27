@@ -5,6 +5,8 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app import exceptions as exc
+from app.bot.texts import CANT_DELETE_INCOME_TEXT, account_label
 from app.constants import CURRENCY_SYMBOLS, TX_TYPES
 from app.database import async_session_maker
 from app.repositories.account_repository import get_account
@@ -45,9 +47,12 @@ async def build_history_page(telegram_id, page):
             has_more, transactions = await get_recent_transactions(
                 session, user.active_account_id, page
             )
+        header = (
+            f"{account_label(account)} · баланс {account.balance} {currency_symbol}"
+        )
         if len(transactions) == 0:
-            return "Пока нет операций", None
-        text_list = ["Вот твои последние операции\n"]
+            return f"{header}\n\nНа этом счёте пока нет операций", None
+        text_list = [f"{header}\n\nПоследние операции:"]
         builder = InlineKeyboardBuilder()
         for number, (transaction, category_name, category_type) in enumerate(
             transactions, start=1
@@ -130,9 +135,14 @@ async def callback_delete_confirm(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, telegram_id)
-        if await delete_transaction_by_id(
-            session, transaction_id, user.active_account_id
-        ):
+        try:
+            deleted = await delete_transaction_by_id(
+                session, transaction_id, user.active_account_id
+            )
+        except exc.InsufficientFunds:
+            await callback.answer(CANT_DELETE_INCOME_TEXT, show_alert=True)
+            return
+        if deleted:
             await session.commit()
         else:
             await callback.answer("Запись уже удалена", show_alert=True)
