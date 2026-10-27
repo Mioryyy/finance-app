@@ -121,6 +121,7 @@ async def show_category(
     tx_type: str,
     user_id: int,
     text: str = "Выбери категорию",
+    with_back: bool = False,
 ):
     async with async_session_maker() as session:
         user, _is_new = await get_or_create_user(session, user_id)
@@ -132,11 +133,16 @@ async def show_category(
     adjust = [2] * (n // 2)
     if n % 2 == 1:
         adjust.append(1)
-    builder.button(text="📅 Другая дата", callback_data="date:pick")
     builder.button(text="➕ Добавить категорию", callback_data="category_add")
-    adjust.append(2)
-    builder.button(text="❌ Отмена", callback_data="cancel")
     adjust.append(1)
+    if with_back:
+        # когда категорию меняют из окна подтверждения, можно вернуться без выбора
+        builder.button(text="⬅️ Назад", callback_data="entry:back")
+        builder.button(text="❌ Отмена", callback_data="cancel")
+        adjust.append(2)
+    else:
+        builder.button(text="❌ Отмена", callback_data="cancel")
+        adjust.append(1)
     builder.adjust(*adjust)
     keyboard = builder.as_markup()
     await answer_func(text=text, reply_markup=keyboard)
