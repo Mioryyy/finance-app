@@ -31,6 +31,7 @@ class FakeSession(BaseSession):
     def __init__(self):
         super().__init__()
         self.sent = []  # (вид, текст, клавиатура) каждого ответа бота
+        self.other = []  # остальные запросы к Telegram, например «печатает…»
         self.counter = itertools.count(1000)
 
     async def close(self):
@@ -49,6 +50,7 @@ class FakeSession(BaseSession):
                 chat=Chat(id=TG_ID, type="private"),
                 text=method.text,
             )
+        self.other.append(type(method).__name__)
         return True
 
 
@@ -357,7 +359,103 @@ async def test_typing_text_while_confirming_gives_hint(client, world):
     assert "Нажми одну из кнопок" in client.last[0]
 
 
-@pytest.fixture(autouse=True)
-def _no_real_network():
-    # подстраховка: бот в тестах не должен ходить в интернет
-    return None
+# --- категорию предлагает ИИ, когда история не помогла ---
+
+
+@pytest.fixture
+def ai(monkeypatch):
+    """Включает ИИ и подменяет его ответ; запоминает, что ему отправили."""
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    class Fake:
+        answer = None  # id категории, который «выберет» модель
+        calls = []
+
+    async def fake_guess(description, categories):
+        Fake.calls.append((description, categories))
+        return Fake.answer
+
+    Fake.calls = []
+    monkeypatch.setattr(transaction, "guess_category_with_ai", fake_guess)
+    return Fake
+
+
+async def test_ai_suggestion_skips_selection_and_is_marked(client, world, ai):
+    ai.answer = world["food"]
+    await client.say("шаурма 12")
+    text, buttons = client.last
+    assert "Всё верно?" in text and "🍔 Еда" in text
+    assert "🤖" in text and "ИИ" in text  # пользователь видит, что это предложение ИИ
+    assert "entry:confirm" in buttons
+    assert "SendChatAction" in client.fake.other  # пока ИИ думал, бот «печатал»
+
+
+async def test_ai_gets_only_description_and_own_type_categories(
+    client, world, session_maker, ai
+):
+    async with session_maker() as session:
+        salary = await get_or_create_default_category(session, "💼 Зарплата", "income")
+        salary_id = salary.id
+        await session.commit()
+    ai.answer = world["food"]
+    await client.say("шаурма 12")
+    description, categories = ai.calls[0]
+    assert description == "шаурма"  # без суммы
+    ids = {cid for cid, _name in categories}
+    assert world["food"] in ids and world["fun"] in ids
+    assert salary_id not in ids  # для расхода категории дохода не отправляются
+
+
+async def test_ai_not_sure_falls_back_to_category_choice(client, world, ai):
+    ai.answer = None
+    await client.say("шаурма 12")
+    text, buttons = client.last
+    assert "Выбери категорию" in text
+    assert f"category:{world['food']}" in buttons
+
+
+async def test_ai_is_not_asked_when_history_knows(client, world, session_maker, ai):
+    async with session_maker() as session:
+        await create_transaction(
+            session, world["card"], world["food"], "кофе", Decimal("5"), "expense"
+        )
+        await session.commit()
+    ai.answer = world["fun"]
+    await client.say("кофе 7")
+    text, _ = client.last
+    assert "🍔 Еда" in text and "угадана по твоей истории" in text
+    assert ai.calls == []  # история бесплатна и точнее: к ИИ не обращались
+
+
+async def test_ai_is_not_asked_without_a_key(client, world, monkeypatch):
+    called = []
+
+    async def must_not_be_called(description, categories):
+        called.append(description)
+
+    monkeypatch.setattr(transaction, "guess_category_with_ai", must_not_be_called)
+    await client.say("шаурма 12")  # ключа нет (его убирает conftest)
+    assert "Выбери категорию" in client.last[0]
+    assert called == []
+
+
+async def test_ai_suggestion_can_be_changed_before_confirming(
+    client, world, session_maker, ai
+):
+    ai.answer = world["food"]
+    await client.say("шаурма 12")
+    await client.press("entry:category")
+    await client.press(f"category:{world['fun']}")
+    text, _ = client.last
+    assert "🎉 Развлечения" in text
+    assert "🤖" not in text  # выбрал сам: пометки про ИИ больше нет
+    await client.press("entry:confirm")
+    assert (await last_transaction(session_maker)).category_id == world["fun"]
+
+
+async def test_nothing_is_saved_until_ai_suggestion_is_confirmed(
+    client, world, session_maker, ai
+):
+    ai.answer = world["food"]
+    await client.say("шаурма 12")
+    assert await count_transactions(session_maker) == 0
