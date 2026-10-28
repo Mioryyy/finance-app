@@ -6,10 +6,8 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-# роутер сам выбирает бесплатную модель, которая умеет нужные параметры запроса.
-# платную, например openai/gpt-oss-20b, можно задать переменной OPENROUTER_MODEL
-DEFAULT_MODEL = "openrouter/free"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+DEFAULT_MODEL = "openai/gpt-oss-20b"
 TIMEOUT_SECONDS = 4  # бот не должен надолго зависать из-за чужого сервиса
 MAX_NOTE_LENGTH = 100  # описание траты короткое; длинный текст не отправляем
 
@@ -33,17 +31,7 @@ RESPONSE_SCHEMA = {
 def is_enabled() -> bool:
     # ключ читаем при каждом вызове, а не при импорте: так он подхватывается
     # после load_dotenv() и его можно убрать в тестах
-    return bool(os.getenv("OPENROUTER_API_KEY"))
-
-
-def allow_data_collection() -> bool:
-    # по умолчанию запрещаем: тогда запрос идёт только к провайдерам, которые не
-    # хранят промпты и не учатся на них. Бесплатных таких может не оказаться
-    return os.getenv("OPENROUTER_ALLOW_DATA_COLLECTION", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    return bool(os.getenv("GROQ_API_KEY"))
 
 
 def build_request(note: str, categories: list[tuple[int, str]]) -> dict:
@@ -53,22 +41,17 @@ def build_request(note: str, categories: list[tuple[int, str]]) -> dict:
         "note": note[:MAX_NOTE_LENGTH],
         "categories": [{"id": cid, "name": name} for cid, name in categories],
     }
-    provider = {
-        # только провайдеры, которые умеют ВСЕ отправленные параметры (в том числе
-        # строгий JSON); иначе часть провайдеров молча проигнорирует схему
-        "require_parameters": True,
-        "data_collection": "allow" if allow_data_collection() else "deny",
-    }
     return {
-        "model": os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL),
+        "model": os.getenv("GROQ_MODEL", DEFAULT_MODEL),
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
         ],
         "temperature": 0,
-        # часть моделей «думает»: рассуждения тоже считаются в лимит ответа
-        "max_tokens": 2048,
-        "provider": provider,
+        # модель «думающая»: рассуждения тоже считаются в лимит ответа
+        "reasoning_effort": "low",
+        "include_reasoning": False,
+        "max_completion_tokens": 1024,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -81,21 +64,17 @@ def build_request(note: str, categories: list[tuple[int, str]]) -> dict:
 
 
 async def request_completion(body: dict) -> str | None:
-    """Один запрос к OpenRouter. Любая ошибка даёт None: ИИ только подсказывает."""
-    headers = {"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"}
+    """Один запрос к Groq. Любая ошибка даёт None: ИИ только подсказывает."""
+    headers = {"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}"}
     timeout = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.post(API_URL, json=body, headers=headers) as response:
+            async with http.post(GROQ_URL, json=body, headers=headers) as response:
                 if response.status != 200:
                     # тело ответа не логируем: в нём может быть эхо входных данных
-                    logger.warning(
-                        "AI service answered with status %s", response.status
-                    )
+                    logger.warning("Groq answered with status %s", response.status)
                     return None
                 data = await response.json()
-        # при сбое у провайдера OpenRouter иногда отвечает 200 и {"error": ...}:
-        # тогда нет choices, и это тоже обычная «нет подсказки»
         return data["choices"][0]["message"]["content"]
     except (
         aiohttp.ClientError,
@@ -105,7 +84,7 @@ async def request_completion(body: dict) -> str | None:
         IndexError,
         TypeError,
     ):
-        logger.warning("AI request failed", exc_info=True)
+        logger.warning("Groq request failed", exc_info=True)
         return None
 
 
@@ -122,7 +101,7 @@ async def guess_category_with_ai(
     try:
         category_id = json.loads(content)["category_id"]
     except (ValueError, KeyError, TypeError):
-        logger.warning("AI returned an unreadable answer")
+        logger.warning("Groq returned an unreadable answer")
         return None
     # ответу модели не доверяем: подходит только id из списка, который мы отправили.
     # bool — это тоже int в Python, поэтому True (== 1) отдельно отсекаем
