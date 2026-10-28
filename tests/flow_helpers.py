@@ -1,9 +1,11 @@
 """Стенд для тестов диалогов: поддельный Telegram и «пользователь», который пишет боту."""
 
+import asyncio
 import itertools
 from datetime import date
 
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.methods import EditMessageText, SendMessage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
@@ -17,6 +19,8 @@ class FakeSession(BaseSession):
         super().__init__()
         self.sent = []  # (вид, текст, клавиатура) каждого ответа бота
         self.other = []  # остальные запросы к Telegram, например «печатает…»
+        self.chats = []  # chat_id каждого сообщения из sent (тот же порядок)
+        self.fail_for = set()  # в эти chat_id отправка «не удаётся»
         self.counter = itertools.count(1000)
 
     async def close(self):
@@ -26,9 +30,18 @@ class FakeSession(BaseSession):
         raise NotImplementedError
 
     async def make_request(self, bot, method, timeout=None):
+        # настоящий запрос в Telegram занимает время, и в этот момент выполняются
+        # другие обработчики. Уступаем управление, чтобы тесты могли поймать гонки
+        await asyncio.sleep(0)
+        chat_id = getattr(method, "chat_id", None)
+        if chat_id in self.fail_for:
+            raise TelegramBadRequest(
+                method=method, message="Bad Request: chat not found"
+            )
         if isinstance(method, SendMessage | EditMessageText):
             keyboard = getattr(method, "reply_markup", None)
             self.sent.append((type(method).__name__, method.text, keyboard))
+            self.chats.append(chat_id)
             return Message(
                 message_id=next(self.counter),
                 date=date.today(),

@@ -11,6 +11,11 @@ class DeleteDataStates(StatesGroup):
     waiting_for_confirm = State()
 
 
+class FeedbackStates(StatesGroup):
+    waiting_for_text = State()
+    waiting_for_choice = State()
+
+
 class CategoryStates(StatesGroup):
     waiting_for_new_category_name = State()
     waiting_for_type = State()

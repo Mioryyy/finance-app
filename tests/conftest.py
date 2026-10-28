@@ -13,6 +13,7 @@ from app.bot.handlers import (
     add_category,
     cancel,
     delete_data,
+    feedback,
     transaction,
 )
 from app.database import Base
@@ -40,6 +41,10 @@ def _no_ai_by_default(monkeypatch):
     # .env подгружается и в тестах: без этого они ходили бы в настоящий Groq.
     # Тесты ИИ задают ключ сами и подменяют сетевой вызов
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    # то же для ADMIN_CHAT_ID и счётчика «когда последний раз слали отзыв»:
+    # тесты не должны зависеть от .env разработчика и друг от друга
+    monkeypatch.delenv("ADMIN_CHAT_ID", raising=False)
+    feedback.last_sent.clear()
 
 
 @pytest_asyncio.fixture
@@ -83,6 +88,7 @@ async def client(session_maker, monkeypatch):
     routers = (
         cancel.router,
         delete_data.router,
+        feedback.router,
         add_category.router,
         transaction.router,
     )

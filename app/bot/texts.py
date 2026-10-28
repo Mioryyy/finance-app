@@ -3,6 +3,7 @@ import html
 from app.constants import (
     ACCOUNT_TYPES_EMOJI,
     BACKUP_RETENTION_DAYS,
+    FEEDBACK_MAX_LENGTH,
 )
 
 
@@ -40,6 +41,21 @@ def delete_data_warning(counts):
     )
 
 
+FEEDBACK_PROMPT = (
+    "💬 Напиши одним сообщением, что понравилось, что не так или чего не хватает "
+    f"(до {FEEDBACK_MAX_LENGTH} символов).\n"
+    "Передумал: /cancel"
+)
+
+FEEDBACK_CHOICE_TEXT = (
+    "Как отправить?\n\n"
+    "✉️ <b>С моим именем</b>: автор увидит твоё имя в Telegram и сможет тебе ответить.\n"
+    "🕶 <b>Анонимно</b>: автор не узнает, кто написал, и ответить не сможет.\n\n"
+    "Отзыв нигде не сохраняется ботом, он просто пересылается автору."
+)
+
+FEEDBACK_THANKS = "Спасибо! Отзыв отправлен автору 🙌"
+
 DATA_DELETED_TEXT = (
     "🗑 Все твои данные удалены.\n"
     "Если захочешь вернуться, набери /start: всё начнётся с чистого листа."
@@ -76,6 +92,7 @@ HELP_TEXT = (
     "/transfer — перевод между своими счетами одной валюты\n"
     "/add_category — своя категория\n"
     "/create_account — новый счёт\n"
+    "/feedback — написать автору: отзыв, идея, ошибка\n"
     "/delete_my_data — удалить все мои данные\n"
     "/cancel — отменить текущее действие"
 )
