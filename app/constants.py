@@ -12,3 +12,6 @@ ACCOUNT_TYPES_EMOJI = {"card": "💳", "cash": "💵", "crypto": "🪙"}
 OVERDRAFT_ACCOUNT_TYPES = ("card",)
 TX_TYPES = {"expense": "-", "income": "+"}
 PAGE_SIZE = 10
+# сколько дней дампы базы хранятся на сервере (cron-задача удаляет старше этого срока);
+# об этом честно сообщаем пользователю при удалении данных
+BACKUP_RETENTION_DAYS = 14

@@ -1,142 +1,19 @@
 """Диалог записи траты целиком: настоящие хендлеры, подменённый Telegram и БД finance_test."""
 
-import itertools
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-import pytest_asyncio
-from aiogram import Bot, Dispatcher
-from aiogram.client.session.base import BaseSession
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.methods import EditMessageText, SendMessage
-from aiogram.types import CallbackQuery, Chat, Message, Update, User
+from flow_helpers import TG_ID
 from sqlalchemy import func, select
 
-from app.bot.handlers import add_category, cancel, transaction
+from app.bot.handlers import transaction
 from app.models.category import Category
 from app.models.transaction import Transaction
-from app.repositories import category_repository
 from app.repositories.account_repository import create_account
 from app.repositories.category_repository import get_or_create_default_category
 from app.repositories.transaction_repository import create_transaction
 from app.repositories.user_repository import get_or_create_user, set_active_account
-
-TG_ID = 777
-
-
-class FakeSession(BaseSession):
-    """Вместо запросов в Telegram запоминает, что бот попытался отправить."""
-
-    def __init__(self):
-        super().__init__()
-        self.sent = []  # (вид, текст, клавиатура) каждого ответа бота
-        self.other = []  # остальные запросы к Telegram, например «печатает…»
-        self.counter = itertools.count(1000)
-
-    async def close(self):
-        pass
-
-    async def stream_content(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def make_request(self, bot, method, timeout=None):
-        if isinstance(method, SendMessage | EditMessageText):
-            keyboard = getattr(method, "reply_markup", None)
-            self.sent.append((type(method).__name__, method.text, keyboard))
-            return Message(
-                message_id=next(self.counter),
-                date=date.today(),
-                chat=Chat(id=TG_ID, type="private"),
-                text=method.text,
-            )
-        self.other.append(type(method).__name__)
-        return True
-
-
-class Client:
-    """Пользователь, который пишет боту и нажимает кнопки."""
-
-    def __init__(self, dp, bot, fake):
-        self.dp, self.bot, self.fake = dp, bot, fake
-        self.update_id = itertools.count(1)
-        self.user = User(id=TG_ID, is_bot=False, first_name="Тест")
-        self.chat = Chat(id=TG_ID, type="private")
-
-    async def say(self, text):
-        message = Message(
-            message_id=next(self.fake.counter),
-            date=date.today(),
-            chat=self.chat,
-            from_user=self.user,
-            text=text,
-        )
-        await self.dp.feed_update(
-            self.bot, Update(update_id=next(self.update_id), message=message)
-        )
-
-    async def press(self, data):
-        # кнопку нажимают в последнем сообщении бота
-        message = Message(
-            message_id=next(self.fake.counter),
-            date=date.today(),
-            chat=self.chat,
-            text="…",
-        )
-        callback = CallbackQuery(
-            id=str(next(self.update_id)),
-            from_user=self.user,
-            chat_instance="x",
-            message=message,
-            data=data,
-        )
-        await self.dp.feed_update(
-            self.bot, Update(update_id=next(self.update_id), callback_query=callback)
-        )
-
-    @property
-    def last(self):
-        kind, text, keyboard = self.fake.sent[-1]
-        buttons = []
-        if keyboard:
-            buttons = [b.callback_data for row in keyboard.inline_keyboard for b in row]
-        return text, buttons
-
-
-@pytest_asyncio.fixture
-async def client(session_maker, monkeypatch):
-    # хендлеры сами открывают сессии: направляем их в тестовую базу
-    for module in (transaction, add_category, category_repository):
-        monkeypatch.setattr(module, "async_session_maker", session_maker)
-
-    # роутеры живут на уровне модуля и привязываются к диспетчеру один раз
-    routers = (cancel.router, add_category.router, transaction.router)
-    for router in routers:
-        router._parent_router = None
-    dp = Dispatcher(storage=MemoryStorage())
-    for router in routers:
-        dp.include_router(router)
-
-    fake = FakeSession()
-    bot = Bot(token="42:" + "A" * 35, session=fake)
-    yield Client(dp, bot, fake)
-    for router in routers:
-        router._parent_router = None
-
-
-@pytest_asyncio.fixture
-async def world(session_maker):
-    """Пользователь с картой и одной общей категорией «Еда»."""
-    async with session_maker() as session:
-        user, _ = await get_or_create_user(session, TG_ID)
-        card = await create_account(session, user.id, "Карта", "card", "BYN")
-        await set_active_account(session, user, card.id)
-        food = await get_or_create_default_category(session, "🍔 Еда", "expense")
-        fun = await get_or_create_default_category(session, "🎉 Развлечения", "expense")
-        # id берём до commit: после него объекты устаревают
-        ids = {"user": user.id, "card": card.id, "food": food.id, "fun": fun.id}
-        await session.commit()
-        return ids
 
 
 async def count_transactions(session_maker):

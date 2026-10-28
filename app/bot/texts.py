@@ -1,6 +1,9 @@
 import html
 
-from app.constants import ACCOUNT_TYPES_EMOJI
+from app.constants import (
+    ACCOUNT_TYPES_EMOJI,
+    BACKUP_RETENTION_DAYS,
+)
 
 
 def account_label(account):
@@ -20,6 +23,27 @@ def negative_balance_warning(balance):
     # только карта может уйти в минус, остальным не даст update_balance
     return "\n⚠️ Баланс ушёл в минус" if balance < 0 else ""
 
+
+def delete_data_warning(counts):
+    return (
+        "⚠️ <b>Удалить все твои данные?</b>\n\n"
+        "Будет удалено безвозвратно:\n"
+        f"• счетов: {counts['accounts']}\n"
+        f"• операций: {counts['transactions']}\n"
+        f"• переводов: {counts['transfers']}\n"
+        f"• своих категорий: {counts['categories']}\n"
+        "• твой профиль в боте\n\n"
+        "В резервных копиях сервера записи могут сохраняться ещё до "
+        f"{BACKUP_RETENTION_DAYS} дней, потом исчезнут и оттуда. "
+        "Сообщения в этом чате и отзывы, которые ты уже отправил автору, "
+        "бот удалить не может."
+    )
+
+
+DATA_DELETED_TEXT = (
+    "🗑 Все твои данные удалены.\n"
+    "Если захочешь вернуться, набери /start: всё начнётся с чистого листа."
+)
 
 CANT_DELETE_INCOME_TEXT = (
     "Нельзя удалить: на счёте получится минус. "
@@ -52,6 +76,7 @@ HELP_TEXT = (
     "/transfer — перевод между своими счетами одной валюты\n"
     "/add_category — своя категория\n"
     "/create_account — новый счёт\n"
+    "/delete_my_data — удалить все мои данные\n"
     "/cancel — отменить текущее действие"
 )
 

@@ -7,6 +7,10 @@ class TransactionStates(StatesGroup):
     waiting_for_date = State()
 
 
+class DeleteDataStates(StatesGroup):
+    waiting_for_confirm = State()
+
+
 class CategoryStates(StatesGroup):
     waiting_for_new_category_name = State()
     waiting_for_type = State()

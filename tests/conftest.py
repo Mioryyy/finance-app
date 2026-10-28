@@ -2,16 +2,29 @@ import os
 
 import pytest
 import pytest_asyncio
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
+from flow_helpers import TG_ID, Client, FakeSession
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.bot.handlers import (
+    add_category,
+    cancel,
+    delete_data,
+    transaction,
+)
 from app.database import Base
 from app.models.account import Account  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.transaction import Transaction  # noqa: F401
 from app.models.transfer import Transfer  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.repositories import category_repository
+from app.repositories.account_repository import create_account
+from app.repositories.category_repository import get_or_create_default_category
+from app.repositories.user_repository import get_or_create_user, set_active_account
 
 load_dotenv()
 db_password = os.getenv("DB_PASSWORD")
@@ -57,3 +70,45 @@ async def session():
         await conn.execute(text("DROP SCHEMA public CASCADE"))
         await conn.execute(text("CREATE SCHEMA public"))
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(session_maker, monkeypatch):
+    # хендлеры сами открывают сессии: направляем их в тестовую базу
+    for module in (transaction, add_category, delete_data, category_repository):
+        monkeypatch.setattr(module, "async_session_maker", session_maker)
+
+    # роутеры живут на уровне модуля и привязываются к диспетчеру один раз;
+    # порядок как в боевом main.py: delete_data раньше остальных
+    routers = (
+        cancel.router,
+        delete_data.router,
+        add_category.router,
+        transaction.router,
+    )
+    for router in routers:
+        router._parent_router = None
+    dp = Dispatcher(storage=MemoryStorage())
+    for router in routers:
+        dp.include_router(router)
+
+    fake = FakeSession()
+    bot = Bot(token="42:" + "A" * 35, session=fake)
+    yield Client(dp, bot, fake)
+    for router in routers:
+        router._parent_router = None
+
+
+@pytest_asyncio.fixture
+async def world(session_maker):
+    """Пользователь с картой и двумя общими категориями расходов."""
+    async with session_maker() as session:
+        user, _ = await get_or_create_user(session, TG_ID)
+        card = await create_account(session, user.id, "Карта", "card", "BYN")
+        await set_active_account(session, user, card.id)
+        food = await get_or_create_default_category(session, "🍔 Еда", "expense")
+        fun = await get_or_create_default_category(session, "🎉 Развлечения", "expense")
+        # id берём до commit: после него объекты устаревают
+        ids = {"user": user.id, "card": card.id, "food": food.id, "fun": fun.id}
+        await session.commit()
+        return ids
