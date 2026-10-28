@@ -365,7 +365,7 @@ async def test_typing_text_while_confirming_gives_hint(client, world):
 @pytest.fixture
 def ai(monkeypatch):
     """Включает ИИ и подменяет его ответ; запоминает, что ему отправили."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
 
     class Fake:
         answer = None  # id категории, который «выберет» модель

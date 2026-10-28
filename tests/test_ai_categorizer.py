@@ -13,7 +13,7 @@ CATEGORIES = [(1, "🍔 Еда"), (2, "🚕 Транспорт"), (3, "🎉 Ра
 
 @pytest.fixture
 def enabled(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
 
 
 def fake_model(monkeypatch, content):
@@ -98,52 +98,10 @@ async def test_request_sends_only_note_and_categories(enabled, monkeypatch):
         "categories": [{"id": cid, "name": name} for cid, name in CATEGORIES],
     }
     assert body["response_format"]["json_schema"]["strict"] is True
-    # только провайдеры, которые умеют строгий JSON, иначе схему могут проигнорировать
-    assert body["provider"]["require_parameters"] is True
+    assert body["include_reasoning"] is False
     assert (
         "кофе" not in body["messages"][0]["content"]
     )  # текст пользователя не в system
-
-
-async def test_data_collection_is_denied_by_default(enabled, monkeypatch):
-    calls = fake_model(monkeypatch, '{"category_id": 1}')
-    await ai.guess_category_with_ai("кофе", CATEGORIES)
-    # описания трат не должны уходить провайдерам, которые хранят промпты
-    assert calls[0]["provider"]["data_collection"] == "deny"
-
-
-@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes"])
-async def test_data_collection_can_be_allowed(enabled, monkeypatch, value):
-    monkeypatch.setenv("OPENROUTER_ALLOW_DATA_COLLECTION", value)
-    calls = fake_model(monkeypatch, '{"category_id": 1}')
-    await ai.guess_category_with_ai("кофе", CATEGORIES)
-    assert calls[0]["provider"]["data_collection"] == "allow"
-
-
-@pytest.mark.parametrize("value", ["", "0", "false", "no", "maybe"])
-async def test_unclear_privacy_value_stays_strict(enabled, monkeypatch, value):
-    monkeypatch.setenv("OPENROUTER_ALLOW_DATA_COLLECTION", value)
-    calls = fake_model(monkeypatch, '{"category_id": 1}')
-    await ai.guess_category_with_ai("кофе", CATEGORIES)
-    assert calls[0]["provider"]["data_collection"] == "deny"
-
-
-async def test_default_model_is_the_free_router(enabled, monkeypatch):
-    calls = fake_model(monkeypatch, '{"category_id": 1}')
-    await ai.guess_category_with_ai("кофе", CATEGORIES)
-    assert calls[0]["model"] == "openrouter/free"
-
-
-async def test_error_body_with_status_200_is_not_a_hint(enabled, monkeypatch):
-    # OpenRouter при сбое у провайдера может ответить 200 и {"error": ...}
-    async def handler(request):
-        return web.json_response({"error": {"message": "provider failed"}})
-
-    server = await serve(monkeypatch, handler)
-    try:
-        assert await ai.guess_category_with_ai("кофе", CATEGORIES) is None
-    finally:
-        await server.close()
 
 
 async def test_long_note_is_truncated(enabled, monkeypatch):
@@ -154,7 +112,7 @@ async def test_long_note_is_truncated(enabled, monkeypatch):
 
 
 async def test_model_can_be_changed_by_env(enabled, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_MODEL", "another/model")
+    monkeypatch.setenv("GROQ_MODEL", "another/model")
     calls = fake_model(monkeypatch, '{"category_id": 1}')
     await ai.guess_category_with_ai("кофе", CATEGORIES)
     assert calls[0]["model"] == "another/model"
@@ -168,7 +126,7 @@ async def serve(monkeypatch, handler):
     app.router.add_post("/chat", handler)
     server = TestServer(app)
     await server.start_server()
-    monkeypatch.setattr(ai, "API_URL", str(server.make_url("/chat")))
+    monkeypatch.setattr(ai, "GROQ_URL", str(server.make_url("/chat")))
     return server
 
 
@@ -241,5 +199,5 @@ async def test_timeout_returns_none(enabled, monkeypatch):
 
 
 async def test_connection_refused_returns_none(enabled, monkeypatch):
-    monkeypatch.setattr(ai, "API_URL", "http://127.0.0.1:1/chat")
+    monkeypatch.setattr(ai, "GROQ_URL", "http://127.0.0.1:1/chat")
     assert await ai.request_completion({}) is None
