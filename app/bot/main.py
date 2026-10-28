@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
 from app.bot.handlers.cancel import router as cancel_router
+from app.bot.handlers.delete_data import router as delete_data_router
+from app.bot.handlers.feedback import router as feedback_router
 from app.bot.handlers.help import router as help_router
 from app.bot.handlers.history import router as history_router
 from app.bot.handlers.start import router as start_router
@@ -24,6 +26,9 @@ bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 dp.include_router(cancel_router)
 dp.include_router(help_router)
+# раньше остальных: команда должна сработать и посреди любого диалога
+dp.include_router(delete_data_router)
+dp.include_router(feedback_router)
 dp.include_router(accounts_router)
 dp.include_router(transfer_router)
 dp.include_router(start_router)
@@ -41,6 +46,8 @@ commands = [
     BotCommand(command="add_category", description="Добавить свою категорию"),
     BotCommand(command="create_account", description="Создать новый счёт"),
     BotCommand(command="help", description="Как пользоваться ботом"),
+    BotCommand(command="feedback", description="Написать автору"),
+    BotCommand(command="delete_my_data", description="Удалить все мои данные"),
     BotCommand(command="cancel", description="Отменить текущее действие"),
     BotCommand(command="start", description="Начать заново"),
 ]

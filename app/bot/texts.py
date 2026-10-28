@@ -1,6 +1,10 @@
 import html
 
-from app.constants import ACCOUNT_TYPES_EMOJI
+from app.constants import (
+    ACCOUNT_TYPES_EMOJI,
+    BACKUP_RETENTION_DAYS,
+    FEEDBACK_MAX_LENGTH,
+)
 
 
 def account_label(account):
@@ -20,6 +24,42 @@ def negative_balance_warning(balance):
     # только карта может уйти в минус, остальным не даст update_balance
     return "\n⚠️ Баланс ушёл в минус" if balance < 0 else ""
 
+
+def delete_data_warning(counts):
+    return (
+        "⚠️ <b>Удалить все твои данные?</b>\n\n"
+        "Будет удалено безвозвратно:\n"
+        f"• счетов: {counts['accounts']}\n"
+        f"• операций: {counts['transactions']}\n"
+        f"• переводов: {counts['transfers']}\n"
+        f"• своих категорий: {counts['categories']}\n"
+        "• твой профиль в боте\n\n"
+        "В резервных копиях сервера записи могут сохраняться ещё до "
+        f"{BACKUP_RETENTION_DAYS} дней, потом исчезнут и оттуда. "
+        "Сообщения в этом чате и отзывы, которые ты уже отправил автору, "
+        "бот удалить не может."
+    )
+
+
+FEEDBACK_PROMPT = (
+    "💬 Напиши одним сообщением, что понравилось, что не так или чего не хватает "
+    f"(до {FEEDBACK_MAX_LENGTH} символов).\n"
+    "Передумал: /cancel"
+)
+
+FEEDBACK_CHOICE_TEXT = (
+    "Как отправить?\n\n"
+    "✉️ <b>С моим именем</b>: автор увидит твоё имя в Telegram и сможет тебе ответить.\n"
+    "🕶 <b>Анонимно</b>: автор не узнает, кто написал, и ответить не сможет.\n\n"
+    "Отзыв нигде не сохраняется ботом, он просто пересылается автору."
+)
+
+FEEDBACK_THANKS = "Спасибо! Отзыв отправлен автору 🙌"
+
+DATA_DELETED_TEXT = (
+    "🗑 Все твои данные удалены.\n"
+    "Если захочешь вернуться, набери /start: всё начнётся с чистого листа."
+)
 
 CANT_DELETE_INCOME_TEXT = (
     "Нельзя удалить: на счёте получится минус. "
@@ -52,6 +92,8 @@ HELP_TEXT = (
     "/transfer — перевод между своими счетами одной валюты\n"
     "/add_category — своя категория\n"
     "/create_account — новый счёт\n"
+    "/feedback — написать автору: отзыв, идея, ошибка\n"
+    "/delete_my_data — удалить все мои данные\n"
     "/cancel — отменить текущее действие"
 )
 
