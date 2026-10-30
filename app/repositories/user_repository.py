@@ -1,4 +1,4 @@
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import DEFAULT_ACCOUNT_NAME
@@ -142,3 +142,39 @@ async def delete_user_data(session: AsyncSession, user_id: int):
     await session.execute(delete(Category).where(Category.owner_id == user_id))
     await session.execute(delete(User).where(User.id == user_id))
     await session.flush()
+
+
+def _funnel_columns():
+    # сколько у пользователя операций по всем его счетам
+    operations = (
+        select(func.count(Transaction.id))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == User.id)
+        .scalar_subquery()
+    )
+    has_account = exists().where(Account.owner_id == User.id)
+    return (
+        func.count(User.id),
+        func.count(case((has_account, 1))),
+        func.count(case((operations >= 1, 1))),
+        func.count(case((operations >= 2, 1))),
+    )
+
+
+async def funnel_by_day(session: AsyncSession, since, tz_name: str):
+    """Воронка по дням регистрации: (день, пришли, счёт, 1-я трата, 2+ трат)."""
+    day = func.date(func.timezone(tz_name, User.created_at))
+    stmt = (
+        select(day, *_funnel_columns())
+        .where(User.created_at >= since)
+        .group_by(day)
+        .order_by(day.desc())
+    )
+    result = await session.execute(stmt)
+    return result.all()
+
+
+async def funnel_total(session: AsyncSession):
+    """Та же воронка по всем пользователям, включая пришедших без даты."""
+    result = await session.execute(select(*_funnel_columns()))
+    return result.one()

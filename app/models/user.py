@@ -1,4 +1,6 @@
-from sqlalchemy import BigInteger, Boolean, ForeignKey, false, true
+from datetime import UTC, datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, false, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -19,4 +21,11 @@ class User(Base):
     # вечернее сообщение в 20:00: напоминание или список трат на проверку
     reminders: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true()
+    )
+    # когда человек впервые написал боту; у пользователей, пришедших до
+    # появления колонки, пусто (задним числом дату не узнать)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
     )

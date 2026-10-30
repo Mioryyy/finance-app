@@ -13,6 +13,7 @@ from app.bot.handlers import (
     account_edit,
     accounts,
     add_category,
+    admin,
     cancel,
     delete_data,
     feedback,
@@ -94,6 +95,7 @@ async def client(session_maker, monkeypatch):
         start,
         account_edit,
         accounts,
+        admin,
         category_repository,
     ):
         monkeypatch.setattr(module, "async_session_maker", session_maker)
@@ -104,6 +106,7 @@ async def client(session_maker, monkeypatch):
         cancel.router,
         delete_data.router,
         feedback.router,
+        admin.router,
         settings.router,
         review.router,
         account_edit.router,

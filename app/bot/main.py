@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from app.bot.handlers.account_edit import router as account_edit_router
 from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
+from app.bot.handlers.admin import router as admin_router
 from app.bot.handlers.cancel import router as cancel_router
 from app.bot.handlers.delete_data import router as delete_data_router
 from app.bot.handlers.feedback import router as feedback_router
@@ -33,6 +34,7 @@ dp.include_router(help_router)
 # раньше остальных: команда должна сработать и посреди любого диалога
 dp.include_router(delete_data_router)
 dp.include_router(feedback_router)
+dp.include_router(admin_router)
 dp.include_router(settings_router)
 dp.include_router(review_router)
 dp.include_router(account_edit_router)

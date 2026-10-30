@@ -35,3 +35,7 @@ DEFAULT_ACCOUNT_NAME = "Карта"
 ONBOARDING_CURRENCIES = ("BYN", "RUB", "USD", "EUR")
 # после какой по счёту записи один раз предлагаем включить быстрый ввод
 QUICK_ENTRY_OFFER_AFTER = 20
+# имя часового пояса для запросов в Postgres (в коде — фиксированное UTC+3)
+MINSK_TZ_NAME = "Europe/Minsk"
+# /funnel: за сколько последних дней показывать воронку по дням
+FUNNEL_DAYS = 14
