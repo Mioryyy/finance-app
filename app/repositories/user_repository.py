@@ -32,6 +32,34 @@ async def set_active_account(session: AsyncSession, user, account_id: int):
     await session.flush()
 
 
+SETTINGS = ("quick_entry", "reminders")
+
+
+async def toggle_setting(session: AsyncSession, user, name: str):
+    # name приходит из кнопки: разрешаем только известные настройки
+    if name not in SETTINGS:
+        raise ValueError(name)
+    setattr(user, name, not getattr(user, name))
+    await session.flush()
+    return getattr(user, name)
+
+
+async def get_users_for_reminders(session: AsyncSession):
+    # без счёта напоминать нечего: такой человек ещё не дошёл до первой траты
+    stmt = select(User).where(
+        User.reminders.is_(True), User.active_account_id.is_not(None)
+    )
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def disable_reminders(session: AsyncSession, user_ids):
+    await session.execute(
+        update(User).where(User.id.in_(user_ids)).values(reminders=False)
+    )
+    await session.flush()
+
+
 def _account_ids(user_id: int):
     return select(Account.id).where(Account.owner_id == user_id)
 

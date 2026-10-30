@@ -14,6 +14,8 @@ from app.bot.handlers import (
     cancel,
     delete_data,
     feedback,
+    review,
+    settings,
     transaction,
 )
 from app.database import Base
@@ -80,7 +82,14 @@ async def session():
 @pytest_asyncio.fixture
 async def client(session_maker, monkeypatch):
     # хендлеры сами открывают сессии: направляем их в тестовую базу
-    for module in (transaction, add_category, delete_data, category_repository):
+    for module in (
+        transaction,
+        add_category,
+        delete_data,
+        settings,
+        review,
+        category_repository,
+    ):
         monkeypatch.setattr(module, "async_session_maker", session_maker)
 
     # роутеры живут на уровне модуля и привязываются к диспетчеру один раз;
@@ -89,6 +98,8 @@ async def client(session_maker, monkeypatch):
         cancel.router,
         delete_data.router,
         feedback.router,
+        settings.router,
+        review.router,
         add_category.router,
         transaction.router,
     )

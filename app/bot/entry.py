@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.bot.states import TransactionStates
+from app.bot.texts import UNUSUAL_AMOUNT_HINT
 from app.repositories.category_repository import show_category
 
 
@@ -39,6 +40,8 @@ GUESS_HINTS = {
 
 def confirmation_text(data):
     hint = GUESS_HINTS.get(data.get("guess_source"), "")
+    if data.get("unusual_amount"):
+        hint += UNUSUAL_AMOUNT_HINT
     return (
         f"{entry_head(data)}\n"
         f"🏷 {html.escape(data['category_name'])}\n"
