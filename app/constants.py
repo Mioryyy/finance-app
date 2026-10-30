@@ -39,3 +39,5 @@ QUICK_ENTRY_OFFER_AFTER = 20
 MINSK_TZ_NAME = "Europe/Minsk"
 # /funnel: за сколько последних дней показывать воронку по дням
 FUNNEL_DAYS = 14
+# итог недели (по воскресеньям вместо напоминания): сколько категорий показывать
+WEEKLY_TOP_CATEGORIES = 3

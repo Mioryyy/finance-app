@@ -168,3 +168,117 @@ async def test_delivery_error_does_not_stop_the_others(evening, session_maker):
     async with session_maker() as session:
         user = await session.scalar(select(User).where(User.telegram_id == 1))
     assert user.reminders is True  # из-за разовой ошибки не выключаем
+
+
+# ---------- итог недели по воскресеньям ----------
+
+SUNDAY = date(2026, 11, 1)  # неделя: пн 26.10 — вс 01.11
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (1, "1 трату"),
+        (2, "2 траты"),
+        (5, "5 трат"),
+        (11, "11 трат"),
+        (21, "21 трату"),
+        (24, "24 траты"),
+    ],
+)
+def test_plural_spendings(count, expected):
+    assert reminders.plural_spendings(count) == expected
+
+
+async def spend(session, account_id, category_name, amount, day, tx_type="expense"):
+    category = await get_or_create_default_category(session, category_name, tx_type)
+    await create_transaction(
+        session, account_id, category.id, "x", Decimal(amount), tx_type, day
+    )
+
+
+async def test_weekly_summary_on_sunday(evening, session_maker):
+    bot, fake = evening
+    async with session_maker() as session:
+        _, card = await make_user(session, 1)
+        await spend(session, card, "🍔 Еда", "20", date(2026, 10, 27))
+        await spend(session, card, "🍔 Еда", "10", date(2026, 10, 30))
+        await spend(session, card, "🚕 Транспорт", "12", date(2026, 10, 28))
+        await spend(session, card, "🎉 Развлечения", "5", SUNDAY)
+        await spend(session, card, "💰 Зарплата", "100", SUNDAY, "income")  # не трата
+        await spend(session, card, "🍔 Еда", "40", date(2026, 10, 25))  # прошлая неделя
+        await session.commit()
+    await reminders.send_evening_messages(bot, today=SUNDAY)
+    ((text, _),) = messages_to(fake, 1)
+    assert "Итог недели" in text
+    assert "<b>47.00 Br</b> на 4 траты" in text
+    assert "Больше всего: 🍔 Еда — 30.00 Br" in text
+    assert "Дальше: 🚕 Транспорт — 12.00 Br, 🎉 Развлечения — 5.00 Br" in text
+    assert "Прошлая неделя: 40.00 Br" in text
+    assert "Сегодня" not in text  # итог вместо обычного напоминания
+
+
+async def test_no_summary_on_other_days(evening, session_maker):
+    bot, fake = evening
+    async with session_maker() as session:
+        _, card = await make_user(session, 1)
+        await spend(session, card, "🍔 Еда", "20", date(2026, 10, 27))
+        await session.commit()
+    await reminders.send_evening_messages(bot, today=date(2026, 10, 31))  # суббота
+    ((text, _),) = messages_to(fake, 1)
+    assert "Итог недели" not in text
+
+
+async def test_currencies_are_not_added_together(evening, session_maker):
+    bot, fake = evening
+    async with session_maker() as session:
+        user_id, card = await make_user(session, 1)
+        dollars = await create_account(session, user_id, "Доллары", "card", "USD")
+        await spend(session, card, "🍔 Еда", "20", date(2026, 10, 27))
+        await spend(session, dollars.id, "🍔 Еда", "3", date(2026, 10, 27))
+        await session.commit()
+    await reminders.send_evening_messages(bot, today=SUNDAY)
+    ((text, _),) = messages_to(fake, 1)
+    assert "<b>20.00 Br</b> на 1 трату" in text
+    assert "<b>3.00 $</b> на 1 трату" in text
+    assert "23" not in text
+    assert "Прошлая неделя" not in text  # тогда трат не было
+
+
+async def test_empty_week_gets_the_usual_reminder(evening, session_maker):
+    bot, fake = evening
+    async with session_maker() as session:
+        _, card = await make_user(session, 1)
+        await spend(session, card, "🍔 Еда", "40", date(2026, 10, 25))  # только прошлая
+        await session.commit()
+    await reminders.send_evening_messages(bot, today=SUNDAY)
+    ((text, _),) = messages_to(fake, 1)
+    assert "Итог недели" not in text
+    assert "Сегодня ещё нет записей" in text
+
+
+async def test_summary_and_review_list_together(evening, session_maker):
+    bot, fake = evening
+    async with session_maker() as session:
+        _, card = await make_user(session, 1)
+        other = await get_or_create_default_category(session, "📦 Другое", "expense")
+        unsure = await create_transaction(
+            session,
+            card,
+            other.id,
+            "билет",
+            Decimal(12),
+            "expense",
+            date(2026, 10, 29),
+            needs_review=True,
+        )
+        unsure_id = unsure.id
+        await session.commit()
+    await reminders.send_evening_messages(bot, today=SUNDAY)
+    ((text, keyboard),) = messages_to(fake, 1)
+    assert "Итог недели" in text and "Проверь траты" in text
+    assert text.index("Итог недели") < text.index("Проверь траты")
+    assert [b.callback_data for row in keyboard.inline_keyboard for b in row] == [
+        f"tx:show:{unsure_id}",
+        "remind:off",
+    ]

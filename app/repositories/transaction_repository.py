@@ -175,3 +175,27 @@ async def count_user_transactions(session: AsyncSession, user_id):
         .where(Account.owner_id == user_id)
     )
     return await session.scalar(stmt)
+
+
+async def expense_summary(session: AsyncSession, user_id, start: date, end: date):
+    # расходы пользователя за период (включительно) по валюте и категории:
+    # (валюта, категория, сумма, количество)
+    stmt = (
+        select(
+            Account.currency,
+            Category.name,
+            func.sum(Transaction.amount),
+            func.count(Transaction.id),
+        )
+        .join(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
+        .where(
+            Account.owner_id == user_id,
+            Category.type == "expense",
+            Transaction.date >= start,
+            Transaction.date <= end,
+        )
+        .group_by(Account.currency, Category.name)
+    )
+    result = await session.execute(stmt)
+    return result.all()

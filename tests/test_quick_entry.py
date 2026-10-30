@@ -300,3 +300,28 @@ async def test_no_offer_before_the_20th(client, world, session_maker):
         await add_transaction(session_maker, world["card"], world["food"], "кофе", "5")
     await confirm_one(client, world)  # 19-я
     assert "20 записей" not in client.last[0]
+
+
+# ---------- первая запись ----------
+
+
+async def test_first_record_promises_the_weekly_summary(client, world, session_maker):
+    await confirm_one(client, world)
+    assert "Первая запись есть" in client.last[0]
+    await confirm_one(client, world)
+    assert "Первая запись есть" not in client.last[0]  # только у первой
+
+
+async def test_first_record_in_quick_mode(client, world, session_maker):
+    await add_other_category(session_maker)
+    await enable_quick(session_maker)
+    await client.say("билет 12")
+    assert "Первая запись есть" in client.last[0]
+    await client.say("билет 12")
+    assert "Первая запись есть" not in client.last[0]
+
+
+async def test_no_promise_when_reminders_are_off(client, world, session_maker):
+    await client.press("remind:off")
+    await confirm_one(client, world)
+    assert "Первая запись есть" not in client.last[0]

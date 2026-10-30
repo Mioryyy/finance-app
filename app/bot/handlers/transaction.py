@@ -11,6 +11,7 @@ from app import exceptions as exc
 from app.bot.entry import ask_category, date_keyboard, format_date, show_confirmation
 from app.bot.states import TransactionStates
 from app.bot.texts import (
+    FIRST_RECORD_TEXT,
     QUICK_ENTRY_OFFER,
     QUICK_REVIEW_HINT,
     account_label,
@@ -116,6 +117,8 @@ async def save_quick(message: Message, state: FSMContext, needs_review: bool):
             f"{negative_balance_warning(account.balance)}"
             f"{QUICK_REVIEW_HINT if needs_review else ''}"
         )
+        if user.reminders and await count_user_transactions(session, user.id) == 1:
+            text += FIRST_RECORD_TEXT
         await session.commit()
     builder = InlineKeyboardBuilder()
     builder.button(text="✏️ Изменить", callback_data=f"tx:open:{transaction_id}")
@@ -257,13 +260,13 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
             f"баланс {account.balance} {currency_symbol}"
             f"{negative_balance_warning(account.balance)}"
         )
+        records = await count_user_transactions(session, user.id)
+        # обещаем итог недели, только если вечерние сообщения включены
+        if records == 1 and user.reminders:
+            text += FIRST_RECORD_TEXT
         # ровно на N-й записи один раз предлагаем быстрый ввод тем, кто
         # всё ещё подтверждает каждую трату
-        offer_quick = (
-            not user.quick_entry
-            and await count_user_transactions(session, user.id)
-            == QUICK_ENTRY_OFFER_AFTER
-        )
+        offer_quick = not user.quick_entry and records == QUICK_ENTRY_OFFER_AFTER
         await session.commit()
     await callback.message.edit_text(text)
     await callback.answer()
