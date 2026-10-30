@@ -6,3 +6,6 @@ __pycache__/
 *.sql
 *.sql.gz
 backups/
+# исследования и отчёты для TikTok, не код бота
+reports/
+research_notes/
