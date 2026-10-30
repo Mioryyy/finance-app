@@ -1,11 +1,13 @@
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import DEFAULT_ACCOUNT_NAME
 from app.models.account import Account
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
 from app.models.user import User
+from app.repositories.account_repository import create_account
 
 
 async def get_or_create_user(session: AsyncSession, telegram_id: int):
@@ -29,6 +31,50 @@ async def get_user(session: AsyncSession, telegram_id: int):
 
 async def set_active_account(session: AsyncSession, user, account_id: int):
     user.active_account_id = account_id
+    await session.flush()
+
+
+async def create_first_account(session: AsyncSession, user, currency: str):
+    # первый счёт при /start; None, если счёт уже есть.
+    # Блокируем строку пользователя до commit: второе одновременное нажатие
+    # дождётся первого и увидит, что счёт уже создан
+    await session.refresh(user, with_for_update=True)
+    if user.active_account_id is not None:
+        return None
+    # тип card: у карты можно уйти в минус, поэтому первая трата
+    # при нулевом балансе не упадёт с «не хватает денег»
+    account = await create_account(
+        session, user.id, DEFAULT_ACCOUNT_NAME, "card", currency
+    )
+    await set_active_account(session, user, account.id)
+    return account
+
+
+SETTINGS = ("quick_entry", "reminders")
+
+
+async def toggle_setting(session: AsyncSession, user, name: str):
+    # name приходит из кнопки: разрешаем только известные настройки
+    if name not in SETTINGS:
+        raise ValueError(name)
+    setattr(user, name, not getattr(user, name))
+    await session.flush()
+    return getattr(user, name)
+
+
+async def get_users_for_reminders(session: AsyncSession):
+    # без счёта напоминать нечего: такой человек ещё не дошёл до первой траты
+    stmt = select(User).where(
+        User.reminders.is_(True), User.active_account_id.is_not(None)
+    )
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def disable_reminders(session: AsyncSession, user_ids):
+    await session.execute(
+        update(User).where(User.id.in_(user_ids)).values(reminders=False)
+    )
     await session.flush()
 
 
@@ -96,3 +142,39 @@ async def delete_user_data(session: AsyncSession, user_id: int):
     await session.execute(delete(Category).where(Category.owner_id == user_id))
     await session.execute(delete(User).where(User.id == user_id))
     await session.flush()
+
+
+def _funnel_columns():
+    # сколько у пользователя операций по всем его счетам
+    operations = (
+        select(func.count(Transaction.id))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == User.id)
+        .scalar_subquery()
+    )
+    has_account = exists().where(Account.owner_id == User.id)
+    return (
+        func.count(User.id),
+        func.count(case((has_account, 1))),
+        func.count(case((operations >= 1, 1))),
+        func.count(case((operations >= 2, 1))),
+    )
+
+
+async def funnel_by_day(session: AsyncSession, since, tz_name: str):
+    """Воронка по дням регистрации: (день, пришли, счёт, 1-я трата, 2+ трат)."""
+    day = func.date(func.timezone(tz_name, User.created_at))
+    stmt = (
+        select(day, *_funnel_columns())
+        .where(User.created_at >= since)
+        .group_by(day)
+        .order_by(day.desc())
+    )
+    result = await session.execute(stmt)
+    return result.all()
+
+
+async def funnel_total(session: AsyncSession):
+    """Та же воронка по всем пользователям, включая пришедших без даты."""
+    result = await session.execute(select(*_funnel_columns()))
+    return result.one()

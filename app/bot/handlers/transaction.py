@@ -5,16 +5,27 @@ from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app import exceptions as exc
 from app.bot.entry import ask_category, date_keyboard, format_date, show_confirmation
 from app.bot.states import TransactionStates
 from app.bot.texts import (
+    FIRST_RECORD_TEXT,
+    QUICK_ENTRY_OFFER,
+    QUICK_REVIEW_HINT,
     account_label,
     negative_balance_warning,
     not_enough_money_text,
 )
-from app.constants import CURRENCY_SYMBOLS, TX_TYPES
+from app.constants import (
+    CURRENCY_SYMBOLS,
+    QUICK_ENTRY_OFFER_AFTER,
+    QUICK_MAX_WITHOUT_HISTORY,
+    QUICK_UNUSUAL_FACTOR,
+    QUICK_UNUSUAL_MIN,
+    TX_TYPES,
+)
 from app.database import async_session_maker
 from app.parsing import parse_entry
 from app.repositories.account_repository import get_account, get_user_account
@@ -23,7 +34,11 @@ from app.repositories.category_repository import (
     get_user_category,
     guess_category_from_history,
 )
-from app.repositories.transaction_repository import create_transaction
+from app.repositories.transaction_repository import (
+    average_amount,
+    count_user_transactions,
+    create_transaction,
+)
 from app.repositories.user_repository import get_or_create_user
 from app.services.ai_categorizer import guess_category_with_ai, is_enabled
 
@@ -51,6 +66,65 @@ async def suggest_category(message, user_id, description, tx_type):
     return category_id, dict(categories)[category_id], "ai"
 
 
+async def other_category(user_id, tx_type):
+    # общая или своя категория «… Другое» нужного типа; (id, название) или None
+    async with async_session_maker() as session:
+        categories = await get_categories_for_user(session, user_id, tx_type)
+    for category in categories:
+        if category.name.endswith("Другое"):
+            return category.id, category.name
+    return None
+
+
+async def is_unusual_amount(user_id, category_id, amount):
+    async with async_session_maker() as session:
+        average = await average_amount(session, user_id, category_id)
+    if average is None:
+        return amount > QUICK_MAX_WITHOUT_HISTORY
+    return amount > max(average * QUICK_UNUSUAL_FACTOR, QUICK_UNUSUAL_MIN)
+
+
+async def save_quick(message: Message, state: FSMContext, needs_review: bool):
+    # быстрый ввод: сразу записываем, вместо подтверждения кнопка «Изменить»
+    data = await state.get_data()
+    await state.clear()
+    currency_symbol = data["currency_symbol"]
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, message.from_user.id)
+        account = await get_user_account(session, data["account_id"], user.id)
+        try:
+            transaction = await create_transaction(
+                session,
+                account.id,
+                data["category_id"],
+                data["description"],
+                data["amount"],
+                data["tx_type"],
+                data["tr_date"],
+                needs_review=needs_review,
+            )
+        except exc.InsufficientFunds:
+            await message.answer(not_enough_money_text(account, currency_symbol))
+            return
+        await session.refresh(account)
+        # всё нужное читаем до commit: после него объекты протухают
+        transaction_id = transaction.id
+        text = (
+            f"⚡ <b>{html.escape(data['description']) or 'без описания'}</b> "
+            f"{TX_TYPES[data['tx_type']]}{data['amount']} {currency_symbol} → "
+            f"{html.escape(data['category_name'])}\n"
+            f"{account_label(account)} · баланс {account.balance} {currency_symbol}"
+            f"{negative_balance_warning(account.balance)}"
+            f"{QUICK_REVIEW_HINT if needs_review else ''}"
+        )
+        if user.reminders and await count_user_transactions(session, user.id) == 1:
+            text += FIRST_RECORD_TEXT
+        await session.commit()
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✏️ Изменить", callback_data=f"tx:open:{transaction_id}")
+    await message.answer(text, reply_markup=builder.as_markup())
+
+
 @router.message(StateFilter(None))
 async def add_transaction(message: Message, state: FSMContext):
     if not message.text:
@@ -67,6 +141,7 @@ async def add_transaction(message: Message, state: FSMContext):
             return
         account = await get_account(session, user.active_account_id)
         user_id = user.id
+        quick_entry = user.quick_entry
     entry = parse_entry(message.text)
     if entry is None:
         await message.answer(
@@ -91,6 +166,23 @@ async def add_transaction(message: Message, state: FSMContext):
         category_name=category_name,
         guess_source=guess_source,
     )
+    if quick_entry:
+        if suggestion is None:
+            # не угадали: кладём в «Другое», вечером человек сам поправит
+            fallback = await other_category(user_id, tx_type)
+            if fallback:
+                category_id, category_name = fallback
+                await state.update_data(
+                    category_id=category_id, category_name=category_name
+                )
+        if category_id is not None:
+            if not await is_unusual_amount(user_id, category_id, amount):
+                await save_quick(message, state, needs_review=guess_source != "history")
+                return
+            # похоже на опечатку («шаурма 1000»): обычное окно подтверждения
+            await state.update_data(unusual_amount=True)
+            await show_confirmation(message.answer, state)
+            return
     if suggestion:
         # категория найдена (по истории или ИИ): сразу показываем окно подтверждения
         await show_confirmation(message.answer, state)
@@ -168,9 +260,23 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
             f"баланс {account.balance} {currency_symbol}"
             f"{negative_balance_warning(account.balance)}"
         )
+        records = await count_user_transactions(session, user.id)
+        # обещаем итог недели, только если вечерние сообщения включены
+        if records == 1 and user.reminders:
+            text += FIRST_RECORD_TEXT
+        # ровно на N-й записи один раз предлагаем быстрый ввод тем, кто
+        # всё ещё подтверждает каждую трату
+        offer_quick = not user.quick_entry and records == QUICK_ENTRY_OFFER_AFTER
         await session.commit()
     await callback.message.edit_text(text)
     await callback.answer()
+    if offer_quick:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="⚡ Включить", callback_data="quick:on")
+        builder.button(text="Не сейчас", callback_data="quick:no")
+        await callback.message.answer(
+            QUICK_ENTRY_OFFER, reply_markup=builder.as_markup()
+        )
 
 
 @router.callback_query(F.data == "entry:date", TransactionStates.waiting_for_confirm)

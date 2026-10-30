@@ -20,3 +20,7 @@ class DifferentCurrency(TransferError):
 
 class ForeignAccount(TransferError):
     pass
+
+
+class AccountHasOperations(Exception):
+    """Стартовый остаток можно указать только у счёта без операций."""

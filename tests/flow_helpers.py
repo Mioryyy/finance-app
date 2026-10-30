@@ -5,7 +5,7 @@ import itertools
 from datetime import date
 
 from aiogram.client.session.base import BaseSession
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.methods import EditMessageText, SendMessage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
@@ -21,6 +21,7 @@ class FakeSession(BaseSession):
         self.other = []  # остальные запросы к Telegram, например «печатает…»
         self.chats = []  # chat_id каждого сообщения из sent (тот же порядок)
         self.fail_for = set()  # в эти chat_id отправка «не удаётся»
+        self.blocked = set()  # эти chat_id «заблокировали бота»
         self.counter = itertools.count(1000)
 
     async def close(self):
@@ -34,6 +35,10 @@ class FakeSession(BaseSession):
         # другие обработчики. Уступаем управление, чтобы тесты могли поймать гонки
         await asyncio.sleep(0)
         chat_id = getattr(method, "chat_id", None)
+        if chat_id in self.blocked:
+            raise TelegramForbiddenError(
+                method=method, message="Forbidden: bot was blocked by the user"
+            )
         if chat_id in self.fail_for:
             raise TelegramBadRequest(
                 method=method, message="Bad Request: chat not found"

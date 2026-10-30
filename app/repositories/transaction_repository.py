@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import PAGE_SIZE
+from app.models.account import Account
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.repositories.account_repository import update_balance
@@ -17,6 +18,7 @@ async def create_transaction(
     amount,
     tx_type,
     tr_date=None,
+    needs_review=False,
 ):
     if tr_date is None:
         tr_date = date.today()  # noqa: DTZ011
@@ -31,6 +33,7 @@ async def create_transaction(
         description=description,
         amount=amount,
         date=tr_date,
+        needs_review=needs_review,
     )
     session.add(new_transaction)
     await session.flush()
@@ -105,3 +108,94 @@ async def get_recent_transactions(session, account_id, offset=0):
     rows = result.all()
     has_more = len(rows) > PAGE_SIZE
     return has_more, rows[:PAGE_SIZE]
+
+
+async def get_user_transaction(session: AsyncSession, transaction_id, user_id):
+    # операция с любого счёта пользователя (не только активного);
+    # чужую не найдёт: id из кнопки не доверяем
+    stmt = (
+        select(Transaction, Category, Account)
+        .join(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Transaction.id == transaction_id, Account.owner_id == user_id)
+    )
+    result = await session.execute(stmt)
+    return result.one_or_none()
+
+
+async def set_transaction_category(session: AsyncSession, transaction, category_id):
+    # тип категории проверяет вызывающий: расход остаётся расходом,
+    # поэтому баланс пересчитывать не нужно
+    transaction.category_id = category_id
+    transaction.needs_review = False
+    await session.flush()
+
+
+async def mark_reviewed(session: AsyncSession, transaction):
+    transaction.needs_review = False
+    await session.flush()
+
+
+async def get_review_transactions(session: AsyncSession, user_id, limit):
+    stmt = (
+        select(Transaction, Category.name, Category.type, Account.currency)
+        .join(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == user_id, Transaction.needs_review.is_(True))
+        .order_by(Transaction.date, Transaction.id)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return result.all()
+
+
+async def count_transactions_on(session: AsyncSession, user_id, day: date):
+    stmt = (
+        select(func.count(Transaction.id))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == user_id, Transaction.date == day)
+    )
+    return await session.scalar(stmt)
+
+
+async def average_amount(session: AsyncSession, user_id, category_id):
+    # средняя сумма пользователя в категории по всем его счетам; None, если истории нет
+    stmt = (
+        select(func.avg(Transaction.amount))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == user_id, Transaction.category_id == category_id)
+    )
+    return await session.scalar(stmt)
+
+
+async def count_user_transactions(session: AsyncSession, user_id):
+    stmt = (
+        select(func.count(Transaction.id))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == user_id)
+    )
+    return await session.scalar(stmt)
+
+
+async def expense_summary(session: AsyncSession, user_id, start: date, end: date):
+    # расходы пользователя за период (включительно) по валюте и категории:
+    # (валюта, категория, сумма, количество)
+    stmt = (
+        select(
+            Account.currency,
+            Category.name,
+            func.sum(Transaction.amount),
+            func.count(Transaction.id),
+        )
+        .join(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
+        .where(
+            Account.owner_id == user_id,
+            Category.type == "expense",
+            Transaction.date >= start,
+            Transaction.date <= end,
+        )
+        .group_by(Account.currency, Category.name)
+    )
+    result = await session.execute(stmt)
+    return result.all()

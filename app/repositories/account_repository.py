@@ -1,11 +1,13 @@
 from decimal import Decimal
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import exceptions as exc
 from app.constants import OVERDRAFT_ACCOUNT_TYPES
 from app.models.account import Account
+from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 
 
 async def create_account(
@@ -69,3 +71,34 @@ async def get_user_account(session: AsyncSession, account_id, user_id):
     result = await session.execute(stmt)
     account = result.scalar_one_or_none()
     return account
+
+
+async def rename_account(session: AsyncSession, account, name: str):
+    account.name = name
+    await session.flush()
+
+
+async def set_account_type(session: AsyncSession, account, account_type: str):
+    # наличные и крипта не уходят в минус (то же правило — CHECK в базе)
+    if account_type not in OVERDRAFT_ACCOUNT_TYPES and account.balance < 0:
+        raise exc.InsufficientFunds
+    account.type = account_type
+    await session.flush()
+
+
+async def account_has_operations(session: AsyncSession, account_id) -> bool:
+    has_transactions = exists().where(Transaction.account_id == account_id)
+    has_transfers = exists().where(
+        or_(
+            Transfer.from_account_id == account_id, Transfer.to_account_id == account_id
+        )
+    )
+    return await session.scalar(select(has_transactions | has_transfers))
+
+
+async def set_starting_balance(session: AsyncSession, account, amount):
+    # только у пустого счёта: иначе баланс перестанет сходиться с историей
+    if await account_has_operations(session, account.id):
+        raise exc.AccountHasOperations
+    account.balance = amount
+    await session.flush()

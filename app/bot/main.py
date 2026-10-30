@@ -7,17 +7,22 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.types import BotCommand
 from dotenv import load_dotenv
 
+from app.bot.handlers.account_edit import router as account_edit_router
 from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
+from app.bot.handlers.admin import router as admin_router
 from app.bot.handlers.cancel import router as cancel_router
 from app.bot.handlers.delete_data import router as delete_data_router
 from app.bot.handlers.feedback import router as feedback_router
 from app.bot.handlers.help import router as help_router
 from app.bot.handlers.history import router as history_router
+from app.bot.handlers.review import router as review_router
+from app.bot.handlers.settings import router as settings_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
 from app.bot.handlers.transaction import router as add_transaction_router
 from app.bot.handlers.transfer import router as transfer_router
+from app.services.reminders import reminder_loop
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
@@ -29,6 +34,10 @@ dp.include_router(help_router)
 # раньше остальных: команда должна сработать и посреди любого диалога
 dp.include_router(delete_data_router)
 dp.include_router(feedback_router)
+dp.include_router(admin_router)
+dp.include_router(settings_router)
+dp.include_router(review_router)
+dp.include_router(account_edit_router)
 dp.include_router(accounts_router)
 dp.include_router(transfer_router)
 dp.include_router(start_router)
@@ -46,6 +55,7 @@ commands = [
     BotCommand(command="add_category", description="Добавить свою категорию"),
     BotCommand(command="create_account", description="Создать новый счёт"),
     BotCommand(command="help", description="Как пользоваться ботом"),
+    BotCommand(command="settings", description="Быстрый ввод и напоминания"),
     BotCommand(command="feedback", description="Написать автору"),
     BotCommand(command="delete_my_data", description="Удалить все мои данные"),
     BotCommand(command="cancel", description="Отменить текущее действие"),
@@ -55,7 +65,13 @@ commands = [
 
 async def main():
     await bot.set_my_commands(commands)
-    await dp.start_polling(bot)
+    # вечернее сообщение в 20:00 работает рядом с polling; ссылку держим,
+    # иначе задачу может собрать сборщик мусора
+    reminder_task = asyncio.create_task(reminder_loop(bot))
+    try:
+        await dp.start_polling(bot)
+    finally:
+        reminder_task.cancel()
 
 
 if __name__ == "__main__":
