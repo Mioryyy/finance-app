@@ -11,6 +11,7 @@ from app import exceptions as exc
 from app.bot.entry import ask_category, date_keyboard, format_date, show_confirmation
 from app.bot.states import TransactionStates
 from app.bot.texts import (
+    QUICK_ENTRY_OFFER,
     QUICK_REVIEW_HINT,
     account_label,
     negative_balance_warning,
@@ -18,6 +19,7 @@ from app.bot.texts import (
 )
 from app.constants import (
     CURRENCY_SYMBOLS,
+    QUICK_ENTRY_OFFER_AFTER,
     QUICK_MAX_WITHOUT_HISTORY,
     QUICK_UNUSUAL_FACTOR,
     QUICK_UNUSUAL_MIN,
@@ -33,6 +35,7 @@ from app.repositories.category_repository import (
 )
 from app.repositories.transaction_repository import (
     average_amount,
+    count_user_transactions,
     create_transaction,
 )
 from app.repositories.user_repository import get_or_create_user
@@ -254,9 +257,23 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
             f"баланс {account.balance} {currency_symbol}"
             f"{negative_balance_warning(account.balance)}"
         )
+        # ровно на N-й записи один раз предлагаем быстрый ввод тем, кто
+        # всё ещё подтверждает каждую трату
+        offer_quick = (
+            not user.quick_entry
+            and await count_user_transactions(session, user.id)
+            == QUICK_ENTRY_OFFER_AFTER
+        )
         await session.commit()
     await callback.message.edit_text(text)
     await callback.answer()
+    if offer_quick:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="⚡ Включить", callback_data="quick:on")
+        builder.button(text="Не сейчас", callback_data="quick:no")
+        await callback.message.answer(
+            QUICK_ENTRY_OFFER, reply_markup=builder.as_markup()
+        )
 
 
 @router.callback_query(F.data == "entry:date", TransactionStates.waiting_for_confirm)

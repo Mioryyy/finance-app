@@ -166,3 +166,12 @@ async def average_amount(session: AsyncSession, user_id, category_id):
         .where(Account.owner_id == user_id, Transaction.category_id == category_id)
     )
     return await session.scalar(stmt)
+
+
+async def count_user_transactions(session: AsyncSession, user_id):
+    stmt = (
+        select(func.count(Transaction.id))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(Account.owner_id == user_id)
+    )
+    return await session.scalar(stmt)

@@ -7,6 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.types import BotCommand
 from dotenv import load_dotenv
 
+from app.bot.handlers.account_edit import router as account_edit_router
 from app.bot.handlers.accounts import router as accounts_router
 from app.bot.handlers.add_category import router as add_category_router
 from app.bot.handlers.cancel import router as cancel_router
@@ -34,6 +35,7 @@ dp.include_router(delete_data_router)
 dp.include_router(feedback_router)
 dp.include_router(settings_router)
 dp.include_router(review_router)
+dp.include_router(account_edit_router)
 dp.include_router(accounts_router)
 dp.include_router(transfer_router)
 dp.include_router(start_router)

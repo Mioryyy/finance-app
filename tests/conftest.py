@@ -10,12 +10,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.bot.handlers import (
+    account_edit,
+    accounts,
     add_category,
     cancel,
     delete_data,
     feedback,
     review,
     settings,
+    start,
     transaction,
 )
 from app.database import Base
@@ -88,6 +91,9 @@ async def client(session_maker, monkeypatch):
         delete_data,
         settings,
         review,
+        start,
+        account_edit,
+        accounts,
         category_repository,
     ):
         monkeypatch.setattr(module, "async_session_maker", session_maker)
@@ -100,6 +106,9 @@ async def client(session_maker, monkeypatch):
         feedback.router,
         settings.router,
         review.router,
+        account_edit.router,
+        accounts.router,
+        start.router,
         add_category.router,
         transaction.router,
     )

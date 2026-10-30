@@ -6,12 +6,26 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.bot.handlers.account_edit import account_edit_keyboard, account_summary
 from app.bot.states import AccountStates
-from app.bot.texts import ACCOUNT_CREATED_HINT, ACCOUNT_NAME_PROMPT, START_TEXT
-from app.constants import ACCOUNT_TYPES, CURRENCY_SYMBOLS
+from app.bot.texts import (
+    ACCOUNT_CREATED_HINT,
+    FIRST_ENTRY_HINT,
+    ONBOARDING_CURRENCY_TEXT,
+    START_TEXT,
+)
+from app.constants import (
+    ACCOUNT_TYPES,
+    CURRENCY_SYMBOLS,
+    ONBOARDING_CURRENCIES,
+)
 from app.database import async_session_maker
 from app.repositories.account_repository import create_account
-from app.repositories.user_repository import get_or_create_user, set_active_account
+from app.repositories.user_repository import (
+    create_first_account,
+    get_or_create_user,
+    set_active_account,
+)
 
 router = Router()
 
@@ -26,14 +40,41 @@ async def cmd_start(message: Message, state: FSMContext):
         has_account = user.active_account_id is not None
         await session.commit()
     if not has_account:
+        # первый запуск: одно нажатие до первой траты. Название, тип и остаток
+        # человек поправит потом кнопками, если захочет
+        builder = InlineKeyboardBuilder()
+        for currency in ONBOARDING_CURRENCIES:
+            builder.button(text=currency, callback_data=f"onboard:{currency}")
+        builder.adjust(4)
         await message.answer(
-            f"{START_TEXT}Для начала создадим твой первый счёт 👇",
+            f"{START_TEXT}{ONBOARDING_CURRENCY_TEXT}",
+            reply_markup=builder.as_markup(),
         )
-        await message.answer(ACCOUNT_NAME_PROMPT)
-        await state.set_state(AccountStates.waiting_for_name)
         return
 
     await message.answer(f"{START_TEXT}С возвращением! Напиши трату 👇")
+
+
+@router.callback_query(F.data.startswith("onboard:"))
+async def onboarding_currency(callback: CallbackQuery):
+    currency = callback.data.split(":", 1)[1]
+    if currency not in ONBOARDING_CURRENCIES:
+        await callback.answer("Кнопка устарела, набери /start", show_alert=True)
+        return
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        account = await create_first_account(session, user, currency)
+        if account is None:
+            await callback.answer("Счёт уже создан, напиши трату", show_alert=True)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+        text = (
+            f"✅ Готово! Создал счёт\n{account_summary(account)}\n\n{FIRST_ENTRY_HINT}"
+        )
+        keyboard = account_edit_keyboard(account.id)
+        await session.commit()
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
 
 
 @router.message(AccountStates.waiting_for_name)

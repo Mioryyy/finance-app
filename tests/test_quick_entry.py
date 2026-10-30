@@ -260,3 +260,43 @@ async def test_someone_elses_transaction_is_not_touched(client, world, session_m
     assert saved.id == their_tx and saved.needs_review is True
     assert saved.category_id == world["food"]
     assert await balance(session_maker, their_card_id) == Decimal("-5")
+
+
+# ---------- предложение после 20-й записи ----------
+
+
+async def confirm_one(client, world):
+    await client.say("кофе 5")
+    if "Выбери категорию" in client.last[0]:
+        await client.press(f"category:{world['food']}")
+    await client.press("entry:confirm")
+
+
+async def test_quick_entry_is_offered_on_the_20th_record(client, world, session_maker):
+    for _ in range(19):
+        await add_transaction(session_maker, world["card"], world["food"], "кофе", "5")
+    await confirm_one(client, world)  # 20-я
+    text, buttons = client.last
+    assert "20 записей" in text
+    assert buttons == ["quick:on", "quick:no"]
+    await client.press("quick:on")
+    assert (await get_user_row(session_maker)).quick_entry is True
+    await client.press("quick:on")  # повторное нажатие не выключает
+    assert (await get_user_row(session_maker)).quick_entry is True
+
+
+async def test_offer_comes_only_once(client, world, session_maker):
+    for _ in range(19):
+        await add_transaction(session_maker, world["card"], world["food"], "кофе", "5")
+    await confirm_one(client, world)
+    await client.press("quick:no")
+    assert (await get_user_row(session_maker)).quick_entry is False
+    await confirm_one(client, world)  # 21-я
+    assert "20 записей" not in client.last[0]
+
+
+async def test_no_offer_before_the_20th(client, world, session_maker):
+    for _ in range(18):
+        await add_transaction(session_maker, world["card"], world["food"], "кофе", "5")
+    await confirm_one(client, world)  # 19-я
+    assert "20 записей" not in client.last[0]

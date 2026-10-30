@@ -4,7 +4,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.bot.texts import REMINDERS_OFF_TEXT, SETTINGS_TEXT
+from app.bot.texts import (
+    QUICK_ENTRY_LATER_TEXT,
+    QUICK_ENTRY_ON_TEXT,
+    REMINDERS_OFF_TEXT,
+    SETTINGS_TEXT,
+)
 from app.database import async_session_maker
 from app.repositories.user_repository import (
     SETTINGS,
@@ -53,6 +58,25 @@ async def toggle(callback: CallbackQuery):
         await session.commit()
     await callback.message.edit_reply_markup(reply_markup=settings_keyboard(*flags))
     await callback.answer("Сохранено")
+
+
+@router.callback_query(F.data == "quick:on")
+async def quick_entry_on(callback: CallbackQuery):
+    # кнопка из предложения после 20-й записи: именно включаем, а не переключаем,
+    # чтобы повторное нажатие не выключило обратно
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        if not user.quick_entry:
+            await toggle_setting(session, user, "quick_entry")
+        await session.commit()
+    await callback.message.edit_text(QUICK_ENTRY_ON_TEXT)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "quick:no")
+async def quick_entry_later(callback: CallbackQuery):
+    await callback.message.edit_text(QUICK_ENTRY_LATER_TEXT)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "remind:off")
