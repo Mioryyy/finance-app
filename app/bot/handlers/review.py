@@ -1,12 +1,14 @@
 """Карточка уже записанной операции: проверить, сменить категорию, удалить.
 
-Сюда ведут кнопка «✏️ Изменить» после быстрого ввода и вечерний список
+Сюда ведут кнопка «✏️ Изменить» под записанной операцией и вечерний список
 «проверь». Кнопки без состояния FSM: работают и через несколько дней.
+Правка суммы, описания и даты (диалоги с вводом) живёт в tx_edit.py.
 """
 
 import html
 
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -49,25 +51,34 @@ def card_keyboard(transaction):
     builder = InlineKeyboardBuilder()
     if transaction.needs_review:
         builder.button(text="✅ Всё верно", callback_data=f"tx:ok:{transaction.id}")
+    builder.button(text="💰 Сумма", callback_data=f"tx:amt:{transaction.id}")
+    builder.button(text="✏️ Описание", callback_data=f"tx:desc:{transaction.id}")
+    builder.button(text="📅 Дата", callback_data=f"tx:date:{transaction.id}")
     builder.button(text="🏷 Категория", callback_data=f"tx:cat:{transaction.id}")
     builder.button(text="🗑 Удалить", callback_data=f"tx:del:{transaction.id}")
     if transaction.needs_review:
-        builder.adjust(1, 2)
+        builder.adjust(1, 2, 2, 1)
     else:
-        builder.adjust(2)
+        builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 
-async def load(callback: CallbackQuery, session):
+async def load_transaction(session, telegram_id, transaction_id):
     # id операции из кнопки не доверяем: ищем только среди своих счетов
-    transaction_id = int(callback.data.split(":")[2])
-    user, _is_new = await get_or_create_user(session, callback.from_user.id)
+    user, _is_new = await get_or_create_user(session, telegram_id)
     row = await get_user_transaction(session, transaction_id, user.id)
     return user, row
 
 
+async def load(callback: CallbackQuery, session):
+    transaction_id = int(callback.data.split(":")[2])
+    return await load_transaction(session, callback.from_user.id, transaction_id)
+
+
 @router.callback_query(F.data.startswith(("tx:open:", "tx:show:")))
-async def open_card(callback: CallbackQuery):
+async def open_card(callback: CallbackQuery, state: FSMContext):
+    # «Назад» из любого шага правки: забываем незаконченную правку
+    await state.clear()
     async with async_session_maker() as session:
         _user, row = await load(callback, session)
         if row is None:

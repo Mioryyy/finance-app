@@ -16,6 +16,21 @@ from app.repositories.user_repository import get_or_create_user, set_active_acco
 router = Router()
 
 
+def totals_line(accounts):
+    # валюты не складываем: сумма отдельно по каждой. Нужна, только если счетов
+    # больше одного, иначе она повторяет единственную строку
+    if len(accounts) < 2:
+        return None
+    totals = {}
+    for account in accounts:
+        totals[account.currency] = totals.get(account.currency, 0) + account.balance
+    parts = [
+        f"{amount} {CURRENCY_SYMBOLS[currency]}"
+        for currency, amount in sorted(totals.items())
+    ]
+    return "💰 Всего: " + " · ".join(parts)
+
+
 async def build_accounts_page(telegram_id):
     async with async_session_maker() as session:
         user, _ = await get_or_create_user(session, telegram_id)
@@ -37,6 +52,9 @@ async def build_accounts_page(telegram_id):
             )
             text = " ".join(p for p in parts if p)
             text_list.append(text)
+        total = totals_line(accounts)
+        if total:
+            text_list.append(f"\n{total}")
         builder = InlineKeyboardBuilder()
         for account in accounts:
             if account.id != user.active_account_id:

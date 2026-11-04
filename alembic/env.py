@@ -24,6 +24,8 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.account import Account
 from app.models.transfer import Transfer
+from app.models.limit import CategoryLimit
+from app.models.recurring import RecurringPayment
 
 target_metadata = Base.metadata
 

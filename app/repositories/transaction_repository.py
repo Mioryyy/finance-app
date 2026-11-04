@@ -131,6 +131,30 @@ async def set_transaction_category(session: AsyncSession, transaction, category_
     await session.flush()
 
 
+async def set_transaction_amount(
+    session: AsyncSession, transaction, category_type, new_amount
+):
+    # баланс двигаем на разницу, а не на всю сумму: расход «подорожал» -
+    # списываем ещё, доход «подорожал» - зачисляем ещё. Не хватает денег -
+    # InsufficientFunds, и операция остаётся как была
+    diff = new_amount - transaction.amount
+    delta = -diff if category_type == "expense" else diff
+    if delta:
+        await update_balance(session, transaction.account_id, delta)
+    transaction.amount = new_amount
+    await session.flush()
+
+
+async def set_transaction_description(session: AsyncSession, transaction, description):
+    transaction.description = description
+    await session.flush()
+
+
+async def set_transaction_date(session: AsyncSession, transaction, tr_date):
+    transaction.date = tr_date
+    await session.flush()
+
+
 async def mark_reviewed(session: AsyncSession, transaction):
     transaction.needs_review = False
     await session.flush()
@@ -177,9 +201,11 @@ async def count_user_transactions(session: AsyncSession, user_id):
     return await session.scalar(stmt)
 
 
-async def expense_summary(session: AsyncSession, user_id, start: date, end: date):
-    # расходы пользователя за период (включительно) по валюте и категории:
-    # (валюта, категория, сумма, количество)
+async def category_summary(
+    session: AsyncSession, user_id, start: date, end: date, category_type
+):
+    # операции пользователя за период (включительно) по валюте и категории:
+    # (валюта, категория, сумма, количество). Все счета, не только активный
     stmt = (
         select(
             Account.currency,
@@ -191,7 +217,7 @@ async def expense_summary(session: AsyncSession, user_id, start: date, end: date
         .join(Account, Transaction.account_id == Account.id)
         .where(
             Account.owner_id == user_id,
-            Category.type == "expense",
+            Category.type == category_type,
             Transaction.date >= start,
             Transaction.date <= end,
         )
@@ -199,3 +225,7 @@ async def expense_summary(session: AsyncSession, user_id, start: date, end: date
     )
     result = await session.execute(stmt)
     return result.all()
+
+
+async def expense_summary(session: AsyncSession, user_id, start: date, end: date):
+    return await category_summary(session, user_id, start, end, "expense")

@@ -56,7 +56,7 @@ async def test_chosen_category_goes_to_confirmation_not_straight_to_db(
     assert await count_transactions(session_maker) == 0  # пока ничего не записано
 
 
-async def test_confirm_creates_transaction_without_undo_button(
+async def test_confirm_creates_transaction_with_edit_and_delete_buttons(
     client, world, session_maker
 ):
     await client.say("кофе 7")
@@ -64,8 +64,8 @@ async def test_confirm_creates_transaction_without_undo_button(
     await client.press("entry:confirm")
     text, buttons = client.last
     assert "Трата создана" in text
-    assert buttons == []  # кнопки «Отменить» нет
     saved = await last_transaction(session_maker)
+    assert buttons == [f"tx:open:{saved.id}", f"tx:del:{saved.id}"]
     assert (saved.amount, saved.description, saved.category_id) == (
         Decimal("7.00"),
         "кофе",

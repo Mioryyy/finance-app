@@ -198,7 +198,14 @@ async def test_edit_button_opens_the_card(client, world, session_maker):
     await client.press(f"tx:open:{tx}")
     text, buttons = client.last
     assert "кофе" in text and "Проверь категорию" in text
-    assert buttons == [f"tx:ok:{tx}", f"tx:cat:{tx}", f"tx:del:{tx}"]
+    assert buttons == [
+        f"tx:ok:{tx}",
+        f"tx:amt:{tx}",
+        f"tx:desc:{tx}",
+        f"tx:date:{tx}",
+        f"tx:cat:{tx}",
+        f"tx:del:{tx}",
+    ]
 
 
 async def test_ok_clears_the_review_flag(client, world, session_maker):

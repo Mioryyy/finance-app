@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants import DEFAULT_ACCOUNT_NAME
 from app.models.account import Account
 from app.models.category import Category
+from app.models.limit import CategoryLimit
+from app.models.recurring import RecurringPayment
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
 from app.models.user import User
@@ -126,6 +128,11 @@ async def delete_user_data(session: AsyncSession, user_id: int):
     account_ids = _account_ids(user_id)
     await session.execute(
         update(User).where(User.id == user_id).values(active_account_id=None)
+    )
+    # лимиты и регулярные операции ссылаются на счета и категории
+    await session.execute(delete(CategoryLimit).where(CategoryLimit.user_id == user_id))
+    await session.execute(
+        delete(RecurringPayment).where(RecurringPayment.user_id == user_id)
     )
     await session.execute(
         delete(Transfer).where(
