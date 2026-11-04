@@ -17,14 +17,19 @@ from app.bot.handlers import (
     cancel,
     delete_data,
     feedback,
+    limits,
+    recurring,
     review,
     settings,
     start,
     transaction,
+    tx_edit,
 )
 from app.database import Base
 from app.models.account import Account  # noqa: F401
 from app.models.category import Category  # noqa: F401
+from app.models.limit import CategoryLimit  # noqa: F401
+from app.models.recurring import RecurringPayment  # noqa: F401
 from app.models.transaction import Transaction  # noqa: F401
 from app.models.transfer import Transfer  # noqa: F401
 from app.models.user import User  # noqa: F401
@@ -32,6 +37,7 @@ from app.repositories import category_repository
 from app.repositories.account_repository import create_account
 from app.repositories.category_repository import get_or_create_default_category
 from app.repositories.user_repository import get_or_create_user, set_active_account
+from app.services import recurring as recurring_service
 
 load_dotenv()
 db_password = os.getenv("DB_PASSWORD")
@@ -92,6 +98,10 @@ async def client(session_maker, monkeypatch):
         delete_data,
         settings,
         review,
+        tx_edit,
+        limits,
+        recurring,
+        recurring_service,
         start,
         account_edit,
         accounts,
@@ -109,6 +119,9 @@ async def client(session_maker, monkeypatch):
         admin.router,
         settings.router,
         review.router,
+        tx_edit.router,
+        limits.router,
+        recurring.router,
         account_edit.router,
         accounts.router,
         start.router,

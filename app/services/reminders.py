@@ -101,7 +101,10 @@ def evening_message(review_rows, today_count, weekly_text=None):
         parts.append(weekly_text)
     rows = []
     if review_rows:
-        lines = ["🔎 <b>Проверь траты</b>, в которых я не уверен в категории:\n"]
+        lines = [
+            "🔎 <b>Проверь траты</b>: быстрый ввод записал их сам, но категорию "
+            "я угадал не по твоей истории и мог ошибиться.\n"
+        ]
         for number, (transaction, category_name, category_type, currency) in enumerate(
             review_rows, start=1
         ):
@@ -115,7 +118,10 @@ def evening_message(review_rows, today_count, weekly_text=None):
             builder.button(
                 text=f"✏️ {number}", callback_data=f"tx:show:{transaction.id}"
             )
-        lines.append("\nНажми номер, чтобы открыть трату")
+        lines.append(
+            "\nНажми номер нужной траты. Если категория верная, нажми "
+            "«✅ Всё верно», если нет — «🏷 Категория» и выбери другую."
+        )
         parts.append("\n".join(lines))
         count = len(review_rows)
         rows = [5] * (count // 5) + ([count % 5] if count % 5 else [])

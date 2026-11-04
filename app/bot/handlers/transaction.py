@@ -27,7 +27,7 @@ from app.constants import (
     TX_TYPES,
 )
 from app.database import async_session_maker
-from app.parsing import parse_entry
+from app.parsing import extract_date, parse_entry
 from app.repositories.account_repository import get_account, get_user_account
 from app.repositories.category_repository import (
     get_categories_for_user,
@@ -41,6 +41,7 @@ from app.repositories.transaction_repository import (
 )
 from app.repositories.user_repository import get_or_create_user
 from app.services.ai_categorizer import guess_category_with_ai, is_enabled
+from app.services.limits import limit_warning
 
 router = Router()
 
@@ -84,6 +85,14 @@ async def is_unusual_amount(user_id, category_id, amount):
     return amount > max(average * QUICK_UNUSUAL_FACTOR, QUICK_UNUSUAL_MIN)
 
 
+def created_keyboard(transaction_id):
+    # под «Трата создана»: поправить или удалить, не открывая /history
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✏️ Изменить", callback_data=f"tx:open:{transaction_id}")
+    builder.button(text="🗑 Удалить", callback_data=f"tx:del:{transaction_id}")
+    return builder.as_markup()
+
+
 async def save_quick(message: Message, state: FSMContext, needs_review: bool):
     # быстрый ввод: сразу записываем, вместо подтверждения кнопка «Изменить»
     data = await state.get_data()
@@ -117,6 +126,18 @@ async def save_quick(message: Message, state: FSMContext, needs_review: bool):
             f"{negative_balance_warning(account.balance)}"
             f"{QUICK_REVIEW_HINT if needs_review else ''}"
         )
+        if data["tx_type"] == "expense":
+            warning = await limit_warning(
+                session,
+                user.id,
+                data["category_id"],
+                data["category_name"],
+                account.currency,
+                data["tr_date"],
+                data["amount"],
+            )
+            if warning:
+                text += f"\n\n{warning}"
         if user.reminders and await count_user_transactions(session, user.id) == 1:
             text += FIRST_RECORD_TEXT
         await session.commit()
@@ -142,14 +163,20 @@ async def add_transaction(message: Message, state: FSMContext):
         account = await get_account(session, user.active_account_id)
         user_id = user.id
         quick_entry = user.quick_entry
-    entry = parse_entry(message.text)
+    entry_text, entry_date = extract_date(message.text)
+    entry = parse_entry(entry_text)
     if entry is None:
         await message.answer(
             "❌ Не могу распознать сумму.\n\n"
             "Напиши в формате: <b>описание сумма</b>\n"
             "Расход: <i>кофе 5</i>\n"
-            "Доход: <i>+500 зарплата</i>"
+            "Доход: <i>+500 зарплата</i>\n"
+            "Задним числом: <i>вчера кофе 5</i>"
         )
+        return
+    today = date.today()  # noqa: DTZ011
+    if entry_date is not None and entry_date > today:
+        await message.answer("Эта дата ещё не наступила. Напиши другую.")
         return
     description, amount, tx_type = entry
     suggestion = await suggest_category(message, user_id, description, tx_type)
@@ -158,7 +185,7 @@ async def add_transaction(message: Message, state: FSMContext):
         description=description,
         amount=amount,
         tx_type=tx_type,
-        tr_date=date.today(),  # noqa: DTZ011
+        tr_date=entry_date or today,
         account_id=account.id,
         account_label=account_label(account),
         currency_symbol=CURRENCY_SYMBOLS.get(account.currency, account.currency),
@@ -231,7 +258,7 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
             return
         currency_symbol = data["currency_symbol"]
         try:
-            await create_transaction(
+            transaction = await create_transaction(
                 session,
                 account.id,
                 category.id,
@@ -260,6 +287,19 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
             f"баланс {account.balance} {currency_symbol}"
             f"{negative_balance_warning(account.balance)}"
         )
+        if data["tx_type"] == "expense":
+            warning = await limit_warning(
+                session,
+                user.id,
+                category.id,
+                category.name,
+                account.currency,
+                data["tr_date"],
+                data["amount"],
+            )
+            if warning:
+                text += f"\n\n{warning}"
+        transaction_id = transaction.id
         records = await count_user_transactions(session, user.id)
         # обещаем итог недели, только если вечерние сообщения включены
         if records == 1 and user.reminders:
@@ -268,7 +308,9 @@ async def confirm_entry(callback: CallbackQuery, state: FSMContext):
         # всё ещё подтверждает каждую трату
         offer_quick = not user.quick_entry and records == QUICK_ENTRY_OFFER_AFTER
         await session.commit()
-    await callback.message.edit_text(text)
+    await callback.message.edit_text(
+        text, reply_markup=created_keyboard(transaction_id)
+    )
     await callback.answer()
     if offer_quick:
         builder = InlineKeyboardBuilder()

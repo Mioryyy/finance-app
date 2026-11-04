@@ -16,12 +16,16 @@ from app.bot.handlers.delete_data import router as delete_data_router
 from app.bot.handlers.feedback import router as feedback_router
 from app.bot.handlers.help import router as help_router
 from app.bot.handlers.history import router as history_router
+from app.bot.handlers.limits import router as limits_router
+from app.bot.handlers.recurring import router as recurring_router
 from app.bot.handlers.review import router as review_router
 from app.bot.handlers.settings import router as settings_router
 from app.bot.handlers.start import router as start_router
 from app.bot.handlers.stats import router as stats_router
 from app.bot.handlers.transaction import router as add_transaction_router
 from app.bot.handlers.transfer import router as transfer_router
+from app.bot.handlers.tx_edit import router as tx_edit_router
+from app.services.recurring import recurring_loop
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -37,6 +41,9 @@ dp.include_router(feedback_router)
 dp.include_router(admin_router)
 dp.include_router(settings_router)
 dp.include_router(review_router)
+dp.include_router(tx_edit_router)
+dp.include_router(limits_router)
+dp.include_router(recurring_router)
 dp.include_router(account_edit_router)
 dp.include_router(accounts_router)
 dp.include_router(transfer_router)
@@ -49,7 +56,9 @@ dp.include_router(add_transaction_router)
 
 commands = [
     BotCommand(command="history", description="Последние операции"),
-    BotCommand(command="stats", description="Расходы по категориям за месяц"),
+    BotCommand(command="stats", description="Статистика: месяц, неделя, сегодня"),
+    BotCommand(command="limits", description="Лимиты на категории"),
+    BotCommand(command="recurring", description="Зарплата и подписки по расписанию"),
     BotCommand(command="accounts", description="Счета и балансы"),
     BotCommand(command="transfer", description="Перевод между своими счетами"),
     BotCommand(command="add_category", description="Добавить свою категорию"),
@@ -68,10 +77,13 @@ async def main():
     # вечернее сообщение в 20:00 работает рядом с polling; ссылку держим,
     # иначе задачу может собрать сборщик мусора
     reminder_task = asyncio.create_task(reminder_loop(bot))
+    # вопросы «добавить регулярную операцию?» идут по тому же расписанию
+    recurring_task = asyncio.create_task(recurring_loop(bot))
     try:
         await dp.start_polling(bot)
     finally:
         reminder_task.cancel()
+        recurring_task.cancel()
 
 
 if __name__ == "__main__":
