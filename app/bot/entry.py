@@ -54,9 +54,10 @@ def confirm_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Подтвердить", callback_data="entry:confirm")
     builder.button(text="❌ Отмена", callback_data="cancel")
+    builder.button(text="💰 Сменить счёт", callback_data="entry:billing")
     builder.button(text="📅 Сменить дату", callback_data="entry:date")
     builder.button(text="🏷 Сменить категорию", callback_data="entry:category")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 1, 1, 1)
     return builder.as_markup()
 
 

@@ -8,6 +8,7 @@ from flow_helpers import TG_ID
 from sqlalchemy import func, select
 
 from app.bot.handlers import transaction
+from app.models.account import Account
 from app.models.category import Category
 from app.models.transaction import Transaction
 from app.repositories.account_repository import create_account
@@ -49,6 +50,7 @@ async def test_chosen_category_goes_to_confirmation_not_straight_to_db(
     assert buttons == [
         "entry:confirm",
         "cancel",
+        "entry:billing",
         "entry:date",
         "entry:category",
     ]
@@ -336,3 +338,104 @@ async def test_nothing_is_saved_until_ai_suggestion_is_confirmed(
     ai.answer = world["food"]
     await client.say("шаурма 12")
     assert await count_transactions(session_maker) == 0
+
+
+# ---------- смена счёта в окне подтверждения ----------
+
+
+async def add_account(session_maker, user_id, name, account_type, currency, balance):
+    async with session_maker() as session:
+        account = await create_account(
+            session, user_id, name, account_type, currency, Decimal(balance)
+        )
+        account_id = account.id  # до commit: после него объект устаревает
+        await session.commit()
+        return account_id
+
+
+async def account_balance(session_maker, account_id):
+    async with session_maker() as session:
+        return await session.scalar(
+            select(Account.balance).where(Account.id == account_id)
+        )
+
+
+async def open_account_list(client, world):
+    await client.say("кофе 7")
+    await client.press(f"category:{world['food']}")
+    await client.press("entry:billing")
+
+
+async def test_change_account_then_confirm_writes_to_the_chosen_account(
+    client, world, session_maker
+):
+    cash = await add_account(
+        session_maker, world["user"], "Наличные", "cash", "BYN", "50"
+    )
+    await open_account_list(client, world)
+    text, buttons = client.last
+    assert "На какой счёт записать?" in text
+    assert f"entry:acc:{cash}" in buttons and f"entry:acc:{world['card']}" in buttons
+    assert "entry:back" in buttons and "cancel" in buttons
+
+    await client.press(f"entry:acc:{cash}")
+    text, buttons = client.last
+    assert "Всё верно?" in text and "Наличные" in text
+    assert "entry:confirm" in buttons
+
+    await client.press("entry:confirm")
+    assert (await last_transaction(session_maker)).account_id == cash
+    assert await account_balance(session_maker, cash) == Decimal("43.00")
+    assert await account_balance(session_maker, world["card"]) == Decimal("0.00")
+
+
+async def test_changing_account_changes_the_currency_in_the_window(
+    client, world, session_maker
+):
+    savings = await add_account(
+        session_maker, world["user"], "Копилка", "cash", "USD", "50"
+    )
+    await open_account_list(client, world)
+    await client.press(f"entry:acc:{savings}")
+    assert "7.00 $" in client.last[0]
+
+
+async def test_back_from_account_list_returns_to_confirmation(
+    client, world, session_maker
+):
+    await add_account(session_maker, world["user"], "Наличные", "cash", "BYN", "50")
+    await open_account_list(client, world)
+    await client.press("entry:back")
+    text, buttons = client.last
+    assert "Всё верно?" in text and "entry:confirm" in buttons
+    await client.press("entry:confirm")
+    assert (await last_transaction(session_maker)).account_id == world["card"]
+
+
+async def test_single_account_cannot_be_changed(client, world, session_maker):
+    await open_account_list(client, world)
+    assert "AnswerCallbackQuery" in client.fake.other
+    assert "Всё верно?" in client.last[0]  # окно не поменялось
+    await client.press("entry:confirm")
+    assert (await last_transaction(session_maker)).account_id == world["card"]
+
+
+async def test_foreign_account_id_from_a_button_is_rejected(
+    client, world, session_maker
+):
+    await add_account(session_maker, world["user"], "Наличные", "cash", "BYN", "50")
+    async with session_maker() as session:
+        stranger, _ = await get_or_create_user(session, 555)
+        stranger_id = stranger.id
+        await session.commit()
+    foreign = await add_account(
+        session_maker, stranger_id, "Чужой", "cash", "BYN", "99"
+    )
+    await open_account_list(client, world)
+    await client.press(f"entry:acc:{foreign}")
+    # счёт чужой: остаёмся на списке, ничего не меняется
+    assert "На какой счёт записать?" in client.last[0]
+    await client.press("entry:back")
+    await client.press("entry:confirm")
+    assert (await last_transaction(session_maker)).account_id == world["card"]
+    assert await account_balance(session_maker, foreign) == Decimal("99.00")

@@ -8,7 +8,13 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app import exceptions as exc
-from app.bot.entry import ask_category, date_keyboard, format_date, show_confirmation
+from app.bot.entry import (
+    ask_category,
+    date_keyboard,
+    entry_head,
+    format_date,
+    show_confirmation,
+)
 from app.bot.states import TransactionStates
 from app.bot.texts import (
     FIRST_RECORD_TEXT,
@@ -19,6 +25,7 @@ from app.bot.texts import (
     not_enough_money_text,
 )
 from app.constants import (
+    ACCOUNT_TYPES_EMOJI,
     CURRENCY_SYMBOLS,
     QUICK_ENTRY_OFFER_AFTER,
     QUICK_MAX_WITHOUT_HISTORY,
@@ -28,7 +35,11 @@ from app.constants import (
 )
 from app.database import async_session_maker
 from app.parsing import extract_date, parse_entry
-from app.repositories.account_repository import get_account, get_user_account
+from app.repositories.account_repository import (
+    get_account,
+    get_accounts_for_user,
+    get_user_account,
+)
 from app.repositories.category_repository import (
     get_categories_for_user,
     get_user_category,
@@ -361,6 +372,64 @@ async def parse_date_manual(message: Message, state: FSMContext):
     await show_confirmation(message.answer, state)
 
 
+@router.callback_query(F.data == "entry:billing", TransactionStates.waiting_for_confirm)
+async def change_billing(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        accounts = await get_accounts_for_user(session, user.id)
+    if len(accounts) < 2:
+        await callback.answer(
+            "У тебя пока один счёт. Новый можно создать: /create_account",
+            show_alert=True,
+        )
+        return
+    builder = InlineKeyboardBuilder()
+    for account in accounts:
+        symbol = CURRENCY_SYMBOLS.get(account.currency, account.currency)
+        mark = "✅ " if account.id == data["account_id"] else ""
+        # текст кнопки не HTML: название счёта берём как есть, без экранирования
+        builder.button(
+            text=(
+                f"{mark}{ACCOUNT_TYPES_EMOJI[account.type]} {account.name} · "
+                f"{account.balance} {symbol}"
+            ),
+            callback_data=f"entry:acc:{account.id}",
+        )
+    builder.button(text="⬅️ Назад", callback_data="entry:back")
+    builder.button(text="❌ Отмена", callback_data="cancel")
+    builder.adjust(*[1] * len(accounts), 2)
+    await callback.message.edit_text(
+        f"{entry_head(data)}\n\nНа какой счёт записать?",
+        reply_markup=builder.as_markup(),
+    )
+    await state.set_state(TransactionStates.waiting_for_account)
+    await callback.answer()
+
+
+@router.callback_query(
+    F.data.regexp(r"^entry:acc:\d+$"), TransactionStates.waiting_for_account
+)
+async def choose_account(callback: CallbackQuery, state: FSMContext):
+    account_id = int(callback.data.split(":")[2])
+    async with async_session_maker() as session:
+        user, _is_new = await get_or_create_user(session, callback.from_user.id)
+        # id из кнопки не доверяем: счёт должен принадлежать этому человеку
+        account = await get_user_account(session, account_id, user.id)
+        if account is None:
+            await callback.answer("Счёт не найден", show_alert=True)
+            return
+        label = account_label(account)
+        currency = account.currency
+    await state.update_data(
+        account_id=account_id,
+        account_label=label,
+        currency_symbol=CURRENCY_SYMBOLS.get(currency, currency),
+    )
+    await show_confirmation(callback.message.edit_text, state)
+    await callback.answer()
+
+
 @router.callback_query(
     F.data == "entry:category", TransactionStates.waiting_for_confirm
 )
@@ -374,7 +443,9 @@ async def change_category(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(
     F.data == "entry:back",
     StateFilter(
-        TransactionStates.waiting_for_date, TransactionStates.waiting_for_category
+        TransactionStates.waiting_for_date,
+        TransactionStates.waiting_for_category,
+        TransactionStates.waiting_for_account,
     ),
 )
 async def back_to_confirmation(callback: CallbackQuery, state: FSMContext):
@@ -388,7 +459,9 @@ async def back_to_confirmation(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     StateFilter(
-        TransactionStates.waiting_for_category, TransactionStates.waiting_for_confirm
+        TransactionStates.waiting_for_category,
+        TransactionStates.waiting_for_confirm,
+        TransactionStates.waiting_for_account,
     )
 )
 async def hint_use_buttons(message: Message):
