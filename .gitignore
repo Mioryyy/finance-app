@@ -9,3 +9,10 @@ backups/
 # исследования и отчёты для TikTok, не код бота
 reports/
 research_notes/
+# документация, промпты Figma и прототип мини-аппа: только локально
+docs/
+tests/test_figma_prompts.py
+# запуск тестового сервера для прототипа
+.claude/launch.json
+# инструкции для Claude: только локально
+CLAUDE.md
